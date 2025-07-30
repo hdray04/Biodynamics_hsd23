@@ -127,6 +127,7 @@ all_matrices = extract_matrices(rotation_data_trials, labels_rotation)
 
 #### Plotting the knee angles at initial contact for each trial
 ####Knee valgus/varus('-'move outwards) should be within -5 to 10 degrees
+### Foot progression angles: -10 (toe in) to +20 (toe out) should typically be toe out 
 initial_contact_frames = find_initial_foot_contact(all_matrices)
 for trial_name, frame in initial_contact_frames.items():
     if trial_name == 'trial_1':  # Only process trial 1
@@ -135,14 +136,18 @@ for trial_name, frame in initial_contact_frames.items():
         left_knee_flexion = -all_angles_3d[trial_name]['left_knee']['sagittal'][frame]
         left_knee_valgus = all_angles_3d[trial_name]['left_knee']['frontal'][frame]
         left_knee_rotation = all_angles_3d[trial_name]['left_knee']['transverse'][frame]
+        left_foot_progression = all_angles_3d[trial_name]['left_fp']['transverse'][frame]
         right_knee_flexion = all_angles_3d[trial_name]['right_knee']['sagittal'][frame]
         right_knee_valgus = all_angles_3d[trial_name]['right_knee']['frontal'][frame]
         right_knee_rotation = all_angles_3d[trial_name]['right_knee']['transverse'][frame]
+        right_foot_progression = all_angles_3d[trial_name]['right_fp']['transverse'][frame]
+
 
         print("Knee angles at initial contact frame for trial 1:")
         print(f"Left Knee Flexion = {left_knee_flexion}, Right Knee Flexion = {right_knee_flexion}")
         print(f"Left Knee Valgus = {left_knee_valgus}, Right Knee Valgus = {right_knee_valgus}")
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
+        print(f"Left Foot Progression = {left_foot_progression}, Right Foot Progression = {right_foot_progression}")
 
     if trial_name == 'trial_2':
         print(f"{trial_name}: Initial foot contact at frame {frame}")
@@ -150,14 +155,17 @@ for trial_name, frame in initial_contact_frames.items():
         left_knee_flexion = -all_angles_3d[trial_name]['left_knee']['sagittal'][frame]
         left_knee_valgus = all_angles_3d[trial_name]['left_knee']['frontal'][frame]
         left_knee_rotation = all_angles_3d[trial_name]['left_knee']['transverse'][frame]
+        left_foot_progression = all_angles_3d[trial_name]['left_fp']['transverse'][frame]
         right_knee_flexion = all_angles_3d[trial_name]['right_knee']['sagittal'][frame]
         right_knee_valgus = all_angles_3d[trial_name]['right_knee']['frontal'][frame]
         right_knee_rotation = all_angles_3d[trial_name]['right_knee']['transverse'][frame]
+        right_foot_progression = all_angles_3d[trial_name]['right_fp']['transverse'][frame]
 
         print("Knee angles at initial contact frame for trial 2:")
         print(f"Left Knee Flexion = {left_knee_flexion}, Right Knee Flexion = {right_knee_flexion}")
         print(f"Left Knee Valgus = {left_knee_valgus}, Right Knee Valgus = {right_knee_valgus}")
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
+        print(f"Left Foot Progression = {left_foot_progression}, Right Foot Progression = {right_foot_progression}")
     
     if trial_name == 'trial_3': 
         print(f"{trial_name}: Initial foot contact at frame {frame}")
@@ -165,13 +173,17 @@ for trial_name, frame in initial_contact_frames.items():
         left_knee_flexion = -all_angles_3d[trial_name]['left_knee']['sagittal'][frame]
         left_knee_valgus = all_angles_3d[trial_name]['left_knee']['frontal'][frame]
         left_knee_rotation = all_angles_3d[trial_name]['left_knee']['transverse'][frame]
+        left_foot_progression = all_angles_3d[trial_name]['left_fp']['transverse'][frame]
         right_knee_flexion = all_angles_3d[trial_name]['right_knee']['sagittal'][frame]
         right_knee_valgus = all_angles_3d[trial_name]['right_knee']['frontal'][frame]
         right_knee_rotation = all_angles_3d[trial_name]['right_knee']['transverse'][frame]
+        right_foot_progression = all_angles_3d[trial_name]['right_fp']['transverse'][frame]
 
         print("Knee angles at initial contact frame for trial 3:")
         print(f"Left Knee Flexion = {left_knee_flexion}, Right Knee Flexion = {right_knee_flexion}")
         print(f"Left Knee Valgus = {left_knee_valgus}, Right Knee Valgus = {right_knee_valgus}")
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
+        print(f"Left Foot Progression = {left_foot_progression}, Right Foot Progression = {right_foot_progression}")
 
 
+ 
