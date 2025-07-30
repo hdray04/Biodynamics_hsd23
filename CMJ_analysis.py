@@ -124,7 +124,9 @@ def find_initial_foot_contact(all_matrices):
     return initial_contact_frames
 
 all_matrices = extract_matrices(rotation_data_trials, labels_rotation)
-# Example usage
+
+#### Plotting the knee angles at initial contact for each trial
+####Knee valgus/varus('-'move outwards) should be within -5 to 10 degrees
 initial_contact_frames = find_initial_foot_contact(all_matrices)
 for trial_name, frame in initial_contact_frames.items():
     if trial_name == 'trial_1':  # Only process trial 1
@@ -173,6 +175,3 @@ for trial_name, frame in initial_contact_frames.items():
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
 
 
-
-#### Plotting the knee angles at initial contact for each trial
-####Knee valgus/varus('-'move outwards) should be within -5 to 10 degrees
