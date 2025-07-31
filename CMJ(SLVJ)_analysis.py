@@ -197,12 +197,6 @@ for trial_name, frame in initial_contact_frames.items():
         print(f"Left Ankle Flexion = {left_ankle_flexion}, Right Ankle Flexion = {right_ankle_flexion}")
 
 def calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_frames=10):
-    """
-    Calculate jump height for each trial using the vertical (z) position of the specified foot.
-    - foot_label: the name of the foot joint (e.g., 'r_foot', 'right_ankle')
-    - standing_frames: number of frames at the start to average for standing height
-    Returns: Dictionary of jump heights {trial_name: jump_height}
-    """
     all_positions = extract_positions_from_matrices(all_matrices)
     jump_heights = {}
     
@@ -220,3 +214,31 @@ def calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_
 
 # Example usage:
 jump_heights = calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_frames=10)
+
+
+'''
+import matplotlib.pyplot as plt
+def plot_annotated_foot_height(all_matrices, trial_name, foot_label='r_foot', standing_frames=10):
+    all_positions = extract_positions_from_matrices(all_matrices)
+    z = all_positions[trial_name][foot_label][:, 2]
+    frames = np.arange(len(z))
+    standing_z = np.mean(z[:standing_frames])
+    max_z = np.max(z)
+    max_frame = np.argmax(z)
+    plt.figure(figsize=(10,5))
+    plt.plot(frames, z, label=f'{foot_label} Z-position')
+    plt.axhline(standing_z, color='green', linestyle='--', label='Standing Z')
+    plt.plot(max_frame, max_z, 'ro', label='Max Z')
+    plt.xlabel('Frame')
+    plt.ylabel('Vertical Position (mm)')
+    plt.title(f'Foot Height Over Time - {trial_name}')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+# Example usage:
+#plot_annotated_foot_height(all_matrices, 'trial_1', foot_label='r_foot')
+#plot_annotated_foot_height(all_matrices, 'trial_2', foot_label='r_foot')
+#plot_annotated_foot_height(all_matrices, 'trial_3', foot_label='r_foot')
+'''
+
+
