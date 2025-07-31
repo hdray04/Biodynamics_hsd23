@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d import proj3d
 
 # Load your data
 squat_2 = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/Squat001-000/pose_filt_0.c3d")
-labels_rotation = squat_2['parameters']['ROTATION']['LABELS']['value']
+labels_rotation = cmj_2['parameters']['ROTATION']['LABELS']['value']
 labels = squat_2['parameters']['POINT']['LABELS']['value']
 
 def extract_knee_angles(squat_2, labels):

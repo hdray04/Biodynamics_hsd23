@@ -2,6 +2,7 @@ import ezc3d
 import numpy as np 
 import matplotlib as plt 
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 
 
 cmj_1 = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/CMJ-001/pose_filt_0.c3d")
@@ -127,7 +128,7 @@ all_matrices = extract_matrices(rotation_data_trials, labels_rotation)
 
 #### Plotting the knee angles at initial contact for each trial
 ####Knee valgus/varus('-'move outwards) should be within -5 to 10 degrees
-### Foot progression angles: -10 (toe in) to +20 (toe out) should typically be toe out 
+### Foot progression angles: -10 (toe in) to +20 (toe out) should typically be toe out   
 initial_contact_frames = find_initial_foot_contact(all_matrices)
 for trial_name, frame in initial_contact_frames.items():
     if trial_name == 'trial_1':  # Only process trial 1
@@ -141,6 +142,8 @@ for trial_name, frame in initial_contact_frames.items():
         right_knee_valgus = all_angles_3d[trial_name]['right_knee']['frontal'][frame]
         right_knee_rotation = all_angles_3d[trial_name]['right_knee']['transverse'][frame]
         right_foot_progression = all_angles_3d[trial_name]['right_fp']['transverse'][frame]
+        left_ankle_flexion = all_angles_3d[trial_name]['left_ankle']['sagittal'][frame]
+        right_ankle_flexion = all_angles_3d[trial_name]['right_ankle']['sagittal'][frame]
 
 
         print("Knee angles at initial contact frame for trial 1:")
@@ -148,6 +151,7 @@ for trial_name, frame in initial_contact_frames.items():
         print(f"Left Knee Valgus = {left_knee_valgus}, Right Knee Valgus = {right_knee_valgus}")
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
         print(f"Left Foot Progression = {left_foot_progression}, Right Foot Progression = {right_foot_progression}")
+        print(f"Left Ankle Flexion = {left_ankle_flexion}, Right Ankle Flexion = {right_ankle_flexion}")
 
     if trial_name == 'trial_2':
         print(f"{trial_name}: Initial foot contact at frame {frame}")
@@ -160,12 +164,16 @@ for trial_name, frame in initial_contact_frames.items():
         right_knee_valgus = all_angles_3d[trial_name]['right_knee']['frontal'][frame]
         right_knee_rotation = all_angles_3d[trial_name]['right_knee']['transverse'][frame]
         right_foot_progression = all_angles_3d[trial_name]['right_fp']['transverse'][frame]
+        left_ankle_flexion = all_angles_3d[trial_name]['left_ankle']['sagittal'][frame]
+        right_ankle_flexion = all_angles_3d[trial_name]['right_ankle']['sagittal'][frame]
+
 
         print("Knee angles at initial contact frame for trial 2:")
         print(f"Left Knee Flexion = {left_knee_flexion}, Right Knee Flexion = {right_knee_flexion}")
         print(f"Left Knee Valgus = {left_knee_valgus}, Right Knee Valgus = {right_knee_valgus}")
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
         print(f"Left Foot Progression = {left_foot_progression}, Right Foot Progression = {right_foot_progression}")
+        print(f"Left Ankle Flexion = {left_ankle_flexion}, Right Ankle Flexion = {right_ankle_flexion}")
     
     if trial_name == 'trial_3': 
         print(f"{trial_name}: Initial foot contact at frame {frame}")
@@ -178,12 +186,37 @@ for trial_name, frame in initial_contact_frames.items():
         right_knee_valgus = all_angles_3d[trial_name]['right_knee']['frontal'][frame]
         right_knee_rotation = all_angles_3d[trial_name]['right_knee']['transverse'][frame]
         right_foot_progression = all_angles_3d[trial_name]['right_fp']['transverse'][frame]
+        left_ankle_flexion = all_angles_3d[trial_name]['left_ankle']['sagittal'][frame]
+        right_ankle_flexion = all_angles_3d[trial_name]['right_ankle']['sagittal'][frame]
 
         print("Knee angles at initial contact frame for trial 3:")
         print(f"Left Knee Flexion = {left_knee_flexion}, Right Knee Flexion = {right_knee_flexion}")
         print(f"Left Knee Valgus = {left_knee_valgus}, Right Knee Valgus = {right_knee_valgus}")
         print(f"Left Knee Rotation = {left_knee_rotation}, Right Knee Rotation = {right_knee_rotation}")
         print(f"Left Foot Progression = {left_foot_progression}, Right Foot Progression = {right_foot_progression}")
+        print(f"Left Ankle Flexion = {left_ankle_flexion}, Right Ankle Flexion = {right_ankle_flexion}")
 
+def calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_frames=10):
+    """
+    Calculate jump height for each trial using the vertical (z) position of the specified foot.
+    - foot_label: the name of the foot joint (e.g., 'r_foot', 'right_ankle')
+    - standing_frames: number of frames at the start to average for standing height
+    Returns: Dictionary of jump heights {trial_name: jump_height}
+    """
+    all_positions = extract_positions_from_matrices(all_matrices)
+    jump_heights = {}
+    
+    for trial_name, joints in all_positions.items():
+        if foot_label not in joints:
+            print(f"Warning: {foot_label} not found in {trial_name}")
+            continue
+        z = joints[foot_label][:, 2]  # Z coordinate (vertical)
+        standing_z = np.mean(z[:standing_frames])  # Average over first N frames for robustness
+        max_z = np.max(z)
+        jump_height = max_z - standing_z
+        jump_heights[trial_name] = jump_height
+        print(f"{trial_name}: Standing Z = {standing_z:.2f}, Max Z = {max_z:.2f}, Jump Height = {jump_height:.2f}, mm") 
+    return jump_heights
 
- 
+# Example usage:
+jump_heights = calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_frames=10)

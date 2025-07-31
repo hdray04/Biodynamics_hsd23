@@ -5,38 +5,41 @@ matplotlib.use('Qt5Agg')  # Since this worked in the test
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import proj3d
+from scipy.signal import find_peaks
 
 # Load your data
-squat_2 = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/Squat001-000/pose_filt_0.c3d")
-labels_rotation = squat_2['parameters']['ROTATION']['LABELS']['value']
-labels = squat_2['parameters']['POINT']['LABELS']['value']
+cmj_2 = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/CMJ-002/pose_filt_0.c3d")
+labels_rotation = cmj_2['parameters']['ROTATION']['LABELS']['value']
+labels = cmj_2['parameters']['POINT']['LABELS']['value']
 
-def extract_knee_angles(squat_2, labels):
-    angle_data_trials = [squat_2['data']['points']]
+def extract_angles(cmj_2, labels):
+    angle_data_trials = [cmj_2['data']['points']]
     angle_indices = {
         'left_knee': labels.index('LeftKneeAngles_Theia'),
         'right_knee': labels.index('RightKneeAngles_Theia'),
         'left_hip': labels.index('LeftHipAngles_Theia'),
         'right_hip': labels.index('RightHipAngles_Theia'),
         'left_fp': labels.index('LeftFootProgressionAngles_Theia'),
-        'right_fp': labels.index('RightFootProgressionAngles_Theia')
+        'right_fp': labels.index('RightFootProgressionAngles_Theia'),
+        'left_ankle': labels.index('LeftAnkleAngles_Theia'),
+        'right_ankle': labels.index('RightAnkleAngles_Theia')
     }
 
     angle_data = angle_data_trials[0]
     n_frames = angle_data.shape[2]
     
-    left_knee_angles = -angle_data[0, angle_indices['left_knee'], :n_frames]
-    right_knee_angles = angle_data[0, angle_indices['right_knee'], :n_frames]
+    left_ankle_angles = angle_data[0, angle_indices['left_ankle'], :n_frames]
+    right_ankle_angles = angle_data[0, angle_indices['right_ankle'], :n_frames]
 
     return {
-        'left': left_knee_angles,
-        'right': right_knee_angles,
+        'left': left_ankle_angles,
+        'right': right_ankle_angles,
         'frames': np.arange(n_frames),
         'n_frames': n_frames
     }
 
-def extract_matrices_final(squat_2, labels_rotation):
-    rotation_data = squat_2['data']['rotations']
+def extract_matrices_final(cmj_2, labels_rotation):
+    rotation_data = cmj_2['data']['rotations']
     matrices_dict = {}
     n_joints = rotation_data.shape[2]
     
@@ -55,7 +58,7 @@ def extract_positions_from_matrices(matrices_dict):
         positions[joint_name] = matrices[:, :3, 3]
     return positions
 
-def create_interactive_squat_viewer(positions, knee_angles):
+def create_interactive_cmj_viewer(positions, ankle_angles):
 
     
     # Create figure with space for slider
@@ -112,35 +115,35 @@ def create_interactive_squat_viewer(positions, knee_angles):
                            'k-', alpha=0.8, linewidth=3)
             connection_lines.append((line, joint1, joint2))
 
-    # Initialize knee label variables
-    knee_text_left = None
-    knee_text_right = None
+    # Initialize ankle label variables
+    ankle_text_left = None
+    ankle_text_right = None
 
-    def update_knee_labels(frame_idx):
-        """Update horizontal knee labels"""
-        nonlocal knee_text_left, knee_text_right
+    def update_ankle_labels(frame_idx):
+        """Update horizontal ankle labels"""
+        nonlocal ankle_text_left, ankle_text_right
         
         # Remove old labels
-        if knee_text_left is not None:
-            knee_text_left.remove()
-        if knee_text_right is not None:
-            knee_text_right.remove()
+        if ankle_text_left is not None:
+            ankle_text_left.remove()
+        if ankle_text_right is not None:
+            ankle_text_right.remove()
         
         # Add new horizontal labels in fixed screen positions
-        knee_text_left = ax.text2D(0.02, 0.95, 
-                                  f"Left Knee: {knee_angles['left'][frame_idx]:.1f}°", 
+        ankle_text_left = ax.text2D(0.02, 0.95, 
+                                  f"Left ankle: {ankle_angles['left'][frame_idx]:.1f}°", 
                                   transform=ax.transAxes, fontsize=14, color='blue', 
                                   fontweight='bold',
                                   bbox=dict(boxstyle="round,pad=0.4", facecolor="lightblue", alpha=0.9))
         
-        knee_text_right = ax.text2D(0.02, 0.88, 
-                                   f"Right Knee: {knee_angles['right'][frame_idx]:.1f}°", 
+        ankle_text_right = ax.text2D(0.02, 0.88, 
+                                   f"Right ankle: {ankle_angles['right'][frame_idx]:.1f}°", 
                                    transform=ax.transAxes, fontsize=14, color='green', 
                                    fontweight='bold',
                                    bbox=dict(boxstyle="round,pad=0.4", facecolor="lightgreen", alpha=0.9))
 
     # Initialize labels
-    update_knee_labels(0)
+    update_ankle_labels(0)
     
     # Frame counter
     frame_text = ax.text2D(0.02, 0.81, f"Frame: 0/{len(positions['pelvis'])-1}", 
@@ -151,7 +154,7 @@ def create_interactive_squat_viewer(positions, knee_angles):
     ax.set_xlabel('X (mm)', fontsize=12)
     ax.set_ylabel('Y (mm)', fontsize=12)
     ax.set_zlabel('Z (mm)', fontsize=12)
-    ax.set_title('Interactive Squat Viewer - Drag Slider to Navigate', fontsize=14, fontweight='bold')
+    ax.set_title('Interactive cmj Viewer - Drag Slider to Navigate', fontsize=14, fontweight='bold')
     ax.set_box_aspect([1, 1, 1])
 
     # Set axis limits
@@ -192,8 +195,8 @@ def create_interactive_squat_viewer(positions, knee_angles):
                 line.set_data([pos1[0], pos2[0]], [pos1[1], pos2[1]])
                 line.set_3d_properties([pos1[2], pos2[2]])
 
-        # Update knee labels
-        update_knee_labels(frame_idx)
+        # Update ankle labels
+        update_ankle_labels(frame_idx)
         
         # Update frame counter
         frame_text.set_text(f"Frame: {frame_idx}/{n_frames-1}")
@@ -233,9 +236,9 @@ def create_interactive_squat_viewer(positions, knee_angles):
     return fig, slider
 
 # Extract data
-print("=== EXTRACTING SQUAT DATA ===")
-knee_angles = extract_knee_angles(squat_2, labels)
-matrices_dict = extract_matrices_final(squat_2, labels_rotation)
+print("=== EXTRACTING cmj DATA ===")
+ankle_angles = extract_angles(cmj_2, labels)
+matrices_dict = extract_matrices_final(cmj_2, labels_rotation)
 positions = extract_positions_from_matrices(matrices_dict)
 
 print(f"Successfully extracted data for {len(positions['pelvis'])} frames")
@@ -243,7 +246,7 @@ print(f"Successfully extracted data for {len(positions['pelvis'])} frames")
 # Create interactive viewer
 if __name__ == "__main__":
     print("=== CREATING INTERACTIVE VIEWER ===")
-    fig, slider = create_interactive_squat_viewer(positions, knee_angles)
+    fig, slider = create_interactive_cmj_viewer(positions, ankle_angles)
     print("Interactive viewer completed")
 
 
