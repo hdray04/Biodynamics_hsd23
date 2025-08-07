@@ -241,4 +241,108 @@ def plot_annotated_foot_height(all_matrices, trial_name, foot_label='r_foot', st
 #plot_annotated_foot_height(all_matrices, 'trial_3', foot_label='r_foot')
 '''
 
+import numpy as np
+import matplotlib.pyplot as plt
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def detect_cmj_phases_height_based(all_positions, trial_name, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10):
+    pelvis_z = all_positions[trial_name][pelvis_marker][:, 2]
+    foot_z = all_positions[trial_name][foot_marker][:, 2]
+    n_frames = len(pelvis_z)
+    standing_z = np.mean(pelvis_z[:10])
+    movement_start = np.where(np.abs(pelvis_z - standing_z) > threshold)[0]
+    standing_end = movement_start[0] if len(movement_start) > 0 else 0
+    min_pelvis_z_frame = np.argmin(pelvis_z[standing_end:]) + standing_end
+    max_pelvis_z_frame = np.argmax(pelvis_z)  # PEAK HEIGHT
+    standing_foot_z = np.mean(foot_z[:10])
+    takeoff_candidates = np.where(foot_z[min_pelvis_z_frame:] > standing_foot_z + threshold)[0]
+    propulsion_end = takeoff_candidates[0] + min_pelvis_z_frame if len(takeoff_candidates) > 0 else n_frames - 1
+    landing_candidates = np.where(foot_z[propulsion_end:] < standing_foot_z + threshold)[0]
+    landing_start = landing_candidates[0] + propulsion_end if len(landing_candidates) > 0 else n_frames - 1
+    settle_candidates = np.where(np.abs(foot_z[landing_start:] - standing_foot_z) < threshold/2)[0]
+    landing_end = settle_candidates[0] + landing_start if len(settle_candidates) > 0 else n_frames - 1
+    phases = {
+        'standing_end': standing_end,
+        'descent_end': min_pelvis_z_frame,
+        'peak_height': max_pelvis_z_frame,
+        'propulsion_end': propulsion_end,
+        'landing_start': landing_start,
+        'landing_end': landing_end
+    }
+    return phases
+
+def get_phase_intervals(phases, n_frames):
+    return [
+        ("Standing", 0, phases['standing_end']),
+        ("Descent", phases['standing_end'], phases['descent_end']),
+        ("Propulsion", phases['descent_end'], phases['propulsion_end']),
+        ("Flight", phases['propulsion_end'], phases['landing_start']),
+        ("Landing", phases['landing_start'], phases['landing_end']),
+        ("Settle", phases['landing_end'], n_frames-1)
+    ]
+
+def plot_aligned_cmj_trials_on_peak(all_positions, trial_names, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10, window=100):
+    plt.figure(figsize=(16, 7))
+    colors = plt.cm.tab10.colors
+    for idx, trial in enumerate(trial_names):
+        phases = detect_cmj_phases_height_based(all_positions, trial, pelvis_marker, foot_marker, threshold)
+        pelvis_z = all_positions[trial][pelvis_marker][:, 2]
+        foot_z = all_positions[trial][foot_marker][:, 2]
+        n_frames = len(pelvis_z)
+        peak_frame = phases['peak_height']
+        # Extract window around peak
+        start = max(0, peak_frame - window)
+        end = min(n_frames, peak_frame + window)
+        x_vals = np.arange(start - peak_frame, end - peak_frame)
+        plt.plot(x_vals, pelvis_z[start:end], label=f"{trial} pelvis", color=colors[idx % len(colors)], linestyle='-')
+        plt.plot(x_vals, foot_z[start:end], label=f"{trial} foot", color=colors[idx % len(colors)], linestyle='--')
+
+        # Shade and label phases for this trial
+        phase_intervals = get_phase_intervals(phases, n_frames)
+        phase_colors = ["#f0f0f0", "#ffe0e0", "#e0ffe0", "#d0f5ff", "#ffe0b2", "#f9f9f9"]
+        for i, (phase, p_start, p_end) in enumerate(phase_intervals):
+            # Only shade if within visible window
+            if p_end >= start and p_start <= end:
+                x1 = max(p_start - peak_frame, x_vals[0])
+                x2 = min(p_end - peak_frame, x_vals[-1])
+                plt.axvspan(x1, x2, color=phase_colors[i], alpha=0.13, lw=0)
+            
+
+        # Draw vertical alignment line at peak
+
+
+    plt.xlabel('Frames (relative to peak pelvis height)')
+    plt.ylabel('Vertical Position (mm)')
+    plt.title('CMJ Trials: Aligned on Peak Pelvis Height (with phase regions)')
+    plt.legend(ncol=2)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+# Example usage:
+all_positions = extract_positions_from_matrices(all_matrices)
+trial_names = list(all_positions.keys())
+plot_aligned_cmj_trials_on_peak(all_positions, trial_names, pelvis_marker='pelvis', foot_marker='r_foot', window=200)
+
+
+
+def print_cmj_phase_durations(all_positions, trial_names, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10):
+    for trial in trial_names:
+        phases = detect_cmj_phases_height_based(all_positions, trial, pelvis_marker, foot_marker, threshold)
+        n_frames = len(all_positions[trial][pelvis_marker])
+        durations = get_phase_durations(phases, n_frames)
+        print(f"Trial: {trial}")
+        for phase, dur in durations.items():
+            print(f"  {phase}: {dur} frames")
+        print("-" * 30)
+
+
+
+# Example usage:
+trial_names = list(all_positions.keys())
+print_cmj_phase_durations(all_positions, trial_names, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10)
