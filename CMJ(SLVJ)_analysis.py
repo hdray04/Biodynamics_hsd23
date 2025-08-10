@@ -335,7 +335,7 @@ def print_cmj_phase_durations(all_positions, trial_names, pelvis_marker='pelvis'
     for trial in trial_names:
         phases = detect_cmj_phases_height_based(all_positions, trial, pelvis_marker, foot_marker, threshold)
         n_frames = len(all_positions[trial][pelvis_marker])
-        durations = get_phase_durations(phases, n_frames)
+        durations = get_phase_intervals(phases, n_frames)
         print(f"Trial: {trial}")
         for phase, dur in durations.items():
             print(f"  {phase}: {dur} frames")
