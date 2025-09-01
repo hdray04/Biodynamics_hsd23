@@ -1,1 +1,4 @@
 ezc3d
+matplotlib
+numpy
+scipy
