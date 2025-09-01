@@ -74,11 +74,14 @@ def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=n
     r_com_raw = np.sum(weighted, axis=0) / total_mass
 
     # Step 2: Apply filtering to position
+    """
     nyquist = fs / 2
     normalized_cutoff = cutoff_freq / nyquist
     b, a = signal.butter(4, normalized_cutoff, 'low')
     r_com_filtered = signal.filtfilt(b, a, r_com_raw, axis=0)
+    """
     
+    r_com_filtered = r_com_raw
     print(f"Applied {cutoff_freq}Hz low-pass filter to position data")
 
     # Step 3: Calculate derivatives using central differences ON FILTERED DATA
@@ -101,10 +104,6 @@ def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=n
     print("Calculated acceleration using central differences")
 
     # Step 4: Calculate forces from the properly calculated acceleration
-    g_vec = np.asarray(g_vec)
-    if g_vec.ndim == 0:
-        g_vec = np.array([0, 0, g_vec])
-    
     # Convert acceleration to m/s² (it's currently in mm/s²)
     a_com_ms2 = a_com / 1000.0
     F_ext = total_mass * (a_com_ms2 - g_vec[None, :])
@@ -112,7 +111,7 @@ def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=n
     print("Calculated forces from corrected acceleration")
     
     # Optional: Apply additional smoothing to forces if still noisy
-    F_ext_smooth = signal.filtfilt(b, a, F_ext, axis=0)
+    #F_ext_smooth = signal.filtfilt(b, a, F_ext, axis=0)
     
     return {
         "r_com_raw": r_com_raw,
@@ -120,7 +119,7 @@ def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=n
         "v_com": v_com,
         "a_com": a_com,
         "F_ext": F_ext,
-        "F_ext_smooth": F_ext_smooth,
+        #"F_ext_smooth": F_ext_smooth,
         "filter_info": {"cutoff": cutoff_freq, "fs": fs}
     }
 
@@ -136,7 +135,7 @@ out_fixed = compute_whole_body_com_fixed(positions, body_mass, fs, cutoff_freq=6
 r_com_fixed = out_fixed["r_com"]
 v_com_fixed = out_fixed["v_com"] 
 a_com_fixed = out_fixed["a_com"]
-F_ext_fixed = out_fixed["F_ext_smooth"]
+F_ext_fixed = out_fixed["F_ext"]
 
 print(f"\nFixed results:")
 print(f"Position range (mm): {np.max(r_com_fixed[:,2]) - np.min(r_com_fixed[:,2]):.1f}")
@@ -153,3 +152,5 @@ else:
     print(f"⚠ Forces still unusual: {max_force_bw:.1f} BW")
 
 print("\nReady for Step 3: Detailed analysis and plotting")
+
+# Plot results for visual inspection
