@@ -110,6 +110,35 @@ def butter_low(x, fs, fc=8, order=2):
     b,a = butter(order, fc/(fs/2), btype='low')
     return filtfilt(b,a,x)
 
+def right_foot_key(d):
+    for k in ['r_foot', 'RightFoot', 'right_foot', 'R_Foot', 'Right_Foot']:
+        if k in d:
+            return k
+    return None
+
+def pelvis_key(d):
+    for k in ['pelvis', 'Pelvis']:
+        if k in d:
+            return k
+    return None
+
+def choose_forward_axis(single_positions):
+    """Return (axis_index, sign) choosing dominant horizontal axis and direction.
+    Uses pelvis if available, else right foot.
+    """
+    key = pelvis_key(single_positions) or right_foot_key(single_positions) or next(iter(single_positions.keys()))
+    arr = single_positions[key]
+    x = np.asarray(arr[:, 0])
+    y = np.asarray(arr[:, 1])
+    span_x = float(np.nanmax(x) - np.nanmin(x))
+    span_y = float(np.nanmax(y) - np.nanmin(y))
+    axis = 0 if span_x >= span_y else 1
+    sig = x if axis == 0 else y
+    sign = np.sign(np.nansum(np.diff(sig)))
+    if sign == 0:
+        sign = 1.0
+    return axis, float(sign)
+
 def detect_to_ic(foot_z, fs, thresh=None):
     """Return first take-off then landing frame indices from vertical foot pos.
 
@@ -137,7 +166,7 @@ def hop_time_and_distance(single_positions):
                       e.g. single_positions['RightFoot'] -> (N,3)
     """
     # Prefer right foot if available, else left
-    foot_key = 'r_foot' if 'r_foot' in single_positions else ('RightFoot' if 'RightFoot' in single_positions else None)
+    foot_key = right_foot_key(single_positions)
     if foot_key is None:
         foot_key = 'l_foot' if 'l_foot' in single_positions else ('LeftFoot' if 'LeftFoot' in single_positions else None)
     if foot_key is None:
@@ -149,7 +178,11 @@ def hop_time_and_distance(single_positions):
         return None
     
     flight_time = (ic_i - to_i)/fs
-    distance_mm = foot[ic_i,0] - foot[to_i,0]  # assumes X is forward axis, in mm
+    # Use chosen forward axis with positive convention
+    axis, sgn = choose_forward_axis(single_positions)
+    distance_mm = sgn * (foot[ic_i, axis] - foot[to_i, axis])
+    if distance_mm < 0:
+        distance_mm = -distance_mm
     distance = float(distance_mm) / 1000.0
 
     return {'TO_frame': to_i,
@@ -168,7 +201,7 @@ def detect_all_hops(single_positions, fs, min_flight_s=0.12, max_flight_s=1.5, m
     """
     positions_mm = infer_positions_unit_scale_mm(single_positions)
     # Choose foot
-    foot_key = 'r_foot' if 'r_foot' in positions_mm else ('RightFoot' if 'RightFoot' in positions_mm else None)
+    foot_key = right_foot_key(positions_mm)
     if foot_key is None:
         foot_key = 'l_foot' if 'l_foot' in positions_mm else ('LeftFoot' if 'LeftFoot' in positions_mm else None)
     if foot_key is None:
@@ -277,7 +310,7 @@ def hop_metrics_from_com(single_positions, fs, body_mass_kg=54.0):
     t_ic = ic_i / fs
     t_peak = peak_idx / fs
 
-    # Horizontal displacement: use foot progression (X-axis) rather than COM
+    # Horizontal displacement: uses foot progression along chosen forward axis
     horiz_disp_m = events['distance_m']
 
     v_com = out['v_com']  # mm/s
@@ -315,11 +348,12 @@ def hop_metrics_per_hop(single_positions, fs, body_mass_kg=54.0):
     a_com = out['a_com']
 
     pairs = detect_all_hops(single_positions, fs)
-    # Choose foot for horizontal displacement (X-axis)
-    foot_key = 'r_foot' if 'r_foot' in single_positions else ('RightFoot' if 'RightFoot' in single_positions else None)
+    # Choose foot for horizontal displacement
+    foot_key = right_foot_key(single_positions)
     if foot_key is None:
         foot_key = 'l_foot' if 'l_foot' in single_positions else ('LeftFoot' if 'LeftFoot' in single_positions else None)
     foot_pos = single_positions.get(foot_key, None)
+    axis, sgn = choose_forward_axis(single_positions)
     results = []
     for to_i, ic_i in pairs:
         com_z = r_com[:, 2]
@@ -334,11 +368,14 @@ def hop_metrics_per_hop(single_positions, fs, body_mass_kg=54.0):
         peak_idx_rel = int(np.argmax(com_z_flight))
         peak_idx = to_i + peak_idx_rel
         com_height_jump_m = float(com_z[peak_idx] - com_z[to_i]) / 1000.0
-        # Foot-based horizontal displacement along forward X-axis (meters)
+        # Foot-based horizontal displacement along forward axis (meters)
         if foot_pos is not None:
-            horiz_disp_m = float(foot_pos[ic_i, 0] - foot_pos[to_i, 0]) / 1000.0
+            horiz_mm = sgn * (float(foot_pos[ic_i, axis] - foot_pos[to_i, axis]))
         else:
-            horiz_disp_m = float(r_com[ic_i, 0] - r_com[to_i, 0]) / 1000.0
+            horiz_mm = sgn * (float(r_com[ic_i, axis] - r_com[to_i, axis]))
+        if horiz_mm < 0:
+            horiz_mm = -horiz_mm
+        horiz_disp_m = horiz_mm / 1000.0
 
         results.append({
             'TO_frame': int(to_i),
@@ -390,5 +427,5 @@ for t, hops in per_trial_hops.items():
         print(f"  Hop {i}:")
         print(f"    Flight time: {m['flight_time_s']:.3f} s")
         print(f"    COM jump height: {m['com_jump_height_m']:.3f} m")
-        print(f"    Horizontal displacement (COM): {m['com_horizontal_displacement_m']:.3f} m")
+        print(f"    Horizontal displacement (forward): {m['foot_horizontal_displacement_m']:.3f} m")
         print(f"    Peak COM at {m['com_peak_time_s']:.3f} s (frame {m['com_peak_frame']})")

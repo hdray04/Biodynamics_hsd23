@@ -7,37 +7,12 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import proj3d
 
-# Load your data
-squat_2 = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/Squat001-000/pose_filt_0.c3d")
-labels_rotation = cmj_2['parameters']['ROTATION']['LABELS']['value']
-labels = squat_2['parameters']['POINT']['LABELS']['value']
+# Load triple hop data
+triple_hop = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/HopTriple-001/pose_filt_0.c3d")
+labels_rotation = triple_hop['parameters']['ROTATION']['LABELS']['value']
 
-def extract_knee_angles(squat_2, labels):
-    angle_data_trials = [squat_2['data']['points']]
-    angle_indices = {
-        'left_knee': labels.index('LeftKneeAngles_Theia'),
-        'right_knee': labels.index('RightKneeAngles_Theia'),
-        'left_hip': labels.index('LeftHipAngles_Theia'),
-        'right_hip': labels.index('RightHipAngles_Theia'),
-        'left_fp': labels.index('LeftFootProgressionAngles_Theia'),
-        'right_fp': labels.index('RightFootProgressionAngles_Theia')
-    }
-
-    angle_data = angle_data_trials[0]
-    n_frames = angle_data.shape[2]
-    
-    left_knee_angles = -angle_data[0, angle_indices['left_knee'], :n_frames]
-    right_knee_angles = angle_data[0, angle_indices['right_knee'], :n_frames]
-
-    return {
-        'left': left_knee_angles,
-        'right': right_knee_angles,
-        'frames': np.arange(n_frames),
-        'n_frames': n_frames
-    }
-
-def extract_matrices_final(squat_2, labels_rotation):
-    rotation_data = squat_2['data']['rotations']
+def extract_matrices_final(c3d_obj, labels_rotation):
+    rotation_data = c3d_obj['data']['rotations']
     matrices_dict = {}
     n_joints = rotation_data.shape[2]
     
@@ -47,7 +22,6 @@ def extract_matrices_final(squat_2, labels_rotation):
             joint_name = label.replace('_4X4', '')
             joint_matrices = rotation_data[:, :, joint_idx, :].transpose(2, 0, 1)
             matrices_dict[joint_name] = joint_matrices
-            
     return matrices_dict
 
 def extract_positions_from_matrices(matrices_dict):
@@ -56,9 +30,9 @@ def extract_positions_from_matrices(matrices_dict):
         positions[joint_name] = matrices[:, :3, 3]
     return positions
 
-def create_gif_with_slider(positions, knee_angles, filename='squat_with_slider.gif', 
+def create_triple_hop_gif(positions, filename='triple_hop.gif', 
                           fps=15, skip_frames=2):
-    """Create an animated GIF with moving slider using Pillow"""
+    """Create an animated GIF for triple hop with stance highlighting."""
     
     print(f"Creating GIF with slider: {filename}")
     
@@ -114,7 +88,7 @@ def create_gif_with_slider(positions, knee_angles, filename='squat_with_slider.g
     ax.set_xlabel('X (mm)', fontsize=12)
     ax.set_ylabel('Y (mm)', fontsize=12)
     ax.set_zlabel('Z (mm)', fontsize=12)
-    ax.set_title('Squat Motion Analysis with Moving Slider', fontsize=14, fontweight='bold')
+    ax.set_title('Triple Hop Animation (stance leg highlighted)', fontsize=14, fontweight='bold')
     ax.set_box_aspect([1, 1, 1])
 
     # Set axis limits
@@ -136,24 +110,17 @@ def create_gif_with_slider(positions, knee_angles, filename='squat_with_slider.g
     slider = Slider(slider_ax, 'Frame', 0, n_frames-1, valinit=0, valstep=1, valfmt='%d')
 
     # Initialize text elements
-    knee_text_left = ax.text2D(0.02, 0.95, 
-                              f"Left Knee: {knee_angles['left'][0]:.1f}°", 
-                              transform=ax.transAxes, fontsize=14, color='blue', 
+    stance_text = ax.text2D(0.02, 0.94, "Stance: n/a", 
+                              transform=ax.transAxes, fontsize=14, color='black', 
                               fontweight='bold',
-                              bbox=dict(boxstyle="round,pad=0.4", facecolor="lightblue", alpha=0.9))
+                              bbox=dict(boxstyle="round,pad=0.4", facecolor="lightyellow", alpha=0.9))
     
-    knee_text_right = ax.text2D(0.02, 0.88, 
-                               f"Right Knee: {knee_angles['right'][0]:.1f}°", 
-                               transform=ax.transAxes, fontsize=14, color='green', 
-                               fontweight='bold',
-                               bbox=dict(boxstyle="round,pad=0.4", facecolor="lightgreen", alpha=0.9))
-    
-    frame_text = ax.text2D(0.02, 0.81, f"Frame: 0/{n_frames-1}", 
+    frame_text = ax.text2D(0.02, 0.88, f"Frame: 0/{n_frames-1}", 
                           transform=ax.transAxes, fontsize=12, color='black',
                           bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
 
     # Add instructions text
-    instructions = ("Animated GIF showing squat motion with slider position")
+    instructions = ("Animated GIF showing triple hop; stance = lower foot")
     fig.text(0.5, 0.02, instructions, ha='center', fontsize=10, 
              bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.8))
 
@@ -185,9 +152,24 @@ def create_gif_with_slider(positions, knee_angles, filename='squat_with_slider.g
                 line.set_data([pos1[0], pos2[0]], [pos1[1], pos2[1]])
                 line.set_3d_properties([pos1[2], pos2[2]])
 
-        # Update text labels
-        knee_text_left.set_text(f"Left Knee: {knee_angles['left'][frame_idx]:.1f}°")
-        knee_text_right.set_text(f"Right Knee: {knee_angles['right'][frame_idx]:.1f}°")
+        # Determine stance leg by foot height (lower Z)
+        l_foot = positions.get('l_foot', positions.get('LeftFoot'))
+        r_foot = positions.get('r_foot', positions.get('RightFoot'))
+        stance = 'n/a'
+        if l_foot is not None and r_foot is not None and frame_idx < len(l_foot) and frame_idx < len(r_foot):
+            if l_foot[frame_idx, 2] < r_foot[frame_idx, 2]:
+                stance = 'Left'
+                if 'l_foot' in joint_scatters:
+                    joint_scatters['l_foot'].set_sizes([180])
+                if 'r_foot' in joint_scatters:
+                    joint_scatters['r_foot'].set_sizes([80])
+            else:
+                stance = 'Right'
+                if 'r_foot' in joint_scatters:
+                    joint_scatters['r_foot'].set_sizes([180])
+                if 'l_foot' in joint_scatters:
+                    joint_scatters['l_foot'].set_sizes([80])
+        stance_text.set_text(f"Stance: {stance}")
         frame_text.set_text(f"Frame: {frame_idx}/{n_frames-1}")
         
         return []
@@ -221,16 +203,15 @@ def create_gif_with_slider(positions, knee_angles, filename='squat_with_slider.g
     return anim
 
 # Extract data
-print("=== EXTRACTING SQUAT DATA ===")
-knee_angles = extract_knee_angles(squat_2, labels)
-matrices_dict = extract_matrices_final(squat_2, labels_rotation)
+print("=== EXTRACTING TRIPLE HOP DATA ===")
+matrices_dict = extract_matrices_final(triple_hop, labels_rotation)
 positions = extract_positions_from_matrices(matrices_dict)
 
 print(f"Successfully extracted data for {len(positions['pelvis'])} frames")
 
-# Create GIF animations
+# Create GIF animation
 if __name__ == "__main__":
-    print("=== CREATING GIF ANIMATIONS ===")
+    print("=== CREATING TRIPLE HOP GIF ===")
     
     # First, make sure pillow is available
     try:
@@ -242,33 +223,4 @@ if __name__ == "__main__":
         subprocess.check_call(['pip', 'install', 'pillow'])
         print("✅ Pillow installed successfully")
     
-    # Create different quality GIFs
-    
-    # High quality (slower, larger file)
-    print("\n🎬 Creating high quality GIF...")
-    create_gif_with_slider(positions, knee_angles, 
-                          filename='squat_high_quality.gif', 
-                          fps=20,         # 20 FPS
-                          skip_frames=1)  # Use all frames
-    
-    # Medium quality (good balance)
-    print("\n🎬 Creating medium quality GIF...")
-    create_gif_with_slider(positions, knee_angles, 
-                          filename='squat_medium_quality.gif', 
-                          fps=15,         # 15 FPS
-                          skip_frames=2)  # Every 2nd frame
-    
-    
-    # Low quality preview (fast, small file)
-    print("\n🎬 Creating preview GIF...")
-    create_gif_with_slider(positions, knee_angles, 
-                          filename='squat_preview.gif', 
-                          fps=10,         # 10 FPS
-                          skip_frames=4)  # Every 4th frame
-    
-    print("\n🎉 All GIFs created successfully!")
-    print("\n📁 Files created:")
-    print("   • squat_high_quality.gif (20 FPS, all frames)")
-    print("   • squat_medium_quality.gif (15 FPS, every 2nd frame)")
-    print("   • squat_preview.gif (10 FPS, every 4th frame)")
-    print("\n💡 You can open these GIFs in any web browser, image viewer, or share them anywhere!")
+    create_triple_hop_gif(positions, filename='triple_hop.gif', fps=15, skip_frames=2)

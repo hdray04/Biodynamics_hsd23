@@ -15,13 +15,30 @@ import src.utils as utils
 
 
 def _compute_axis_limits(positions, margin=200):
-    all_positions = np.concatenate([positions[joint] for joint in positions], axis=0)
-    x_range = [all_positions[:, 0].min() - margin, all_positions[:, 0].max() + margin]
-    y_range = [all_positions[:, 1].min() - margin, all_positions[:, 1].max() + margin]
-    z_range = [all_positions[:, 2].min() - margin, all_positions[:, 2].max() + margin]
-    max_range = max(x_range[1] - x_range[0], y_range[1] - y_range[0], z_range[1] - z_range[0])
-    center = [(x_range[0] + x_range[1]) / 2, (y_range[0] + y_range[1]) / 2, (z_range[0] + z_range[1]) / 2]
-    return center, max_range
+    """Compute finite axis limits robustly; fall back if data invalid."""
+    try:
+        stacks = []
+        for joint, arr in positions.items():
+            a = np.asarray(arr)
+            if a.ndim != 2 or a.shape[1] < 3:
+                continue
+            mask = np.isfinite(a).all(axis=1)
+            if np.any(mask):
+                stacks.append(a[mask, :3])
+        if not stacks:
+            raise ValueError('No finite positions')
+        all_positions = np.concatenate(stacks, axis=0)
+        x0, x1 = float(np.nanmin(all_positions[:, 0]) - margin), float(np.nanmax(all_positions[:, 0]) + margin)
+        y0, y1 = float(np.nanmin(all_positions[:, 1]) - margin), float(np.nanmax(all_positions[:, 1]) + margin)
+        z0, z1 = float(np.nanmin(all_positions[:, 2]) - margin), float(np.nanmax(all_positions[:, 2]) + margin)
+        max_range = max(x1 - x0, y1 - y0, z1 - z0)
+        if not np.isfinite(max_range) or max_range <= 0:
+            raise ValueError('Non-positive range')
+        center = [(x0 + x1) / 2.0, (y0 + y1) / 2.0, (z0 + z1) / 2.0]
+        return center, max_range
+    except Exception:
+        # Fallback to a reasonable cube around origin
+        return [0.0, 0.0, 0.0], 1000.0
 
 
 def init_3d_artists(ax, positions, com=None):
@@ -59,27 +76,30 @@ def init_3d_artists(ax, positions, com=None):
     # Plot joints positions
     for joint_name, pos_data in positions.items():
         if len(pos_data) > frame_idx:  # Safety check
-            pos = pos_data[frame_idx]
-            color = colors.get(joint_name, 'gray')
-            joint_scatters[joint_name] = ax.scatter(pos[0], pos[1], pos[2], 
-                                                   s=120, c=color, alpha=0.9, 
-                                                   edgecolors='black', linewidth=1)
+            pos = np.asarray(pos_data[frame_idx])
+            if pos.shape[0] >= 3 and np.all(np.isfinite(pos[:3])):
+                color = colors.get(joint_name, 'gray')
+                joint_scatters[joint_name] = ax.scatter(pos[0], pos[1], pos[2], 
+                                                       s=120, c=color, alpha=0.9, 
+                                                       edgecolors='black', linewidth=1)
     # Plot joint connections
     for joint1, joint2 in connections:
         if joint1 in positions and joint2 in positions:
-            pos1 = positions[joint1][frame_idx]
-            pos2 = positions[joint2][frame_idx]
-            line, = ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], [pos1[2], pos2[2]],
-                           'k-', alpha=0.8, linewidth=3)
-            connection_lines.append((line, joint1, joint2))
+            pos1 = np.asarray(positions[joint1][frame_idx])
+            pos2 = np.asarray(positions[joint2][frame_idx])
+            if pos1.shape[0] >= 3 and pos2.shape[0] >= 3 and np.all(np.isfinite(pos1[:3])) and np.all(np.isfinite(pos2[:3])):
+                line, = ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], [pos1[2], pos2[2]],
+                               'k-', alpha=0.8, linewidth=3)
+                connection_lines.append((line, joint1, joint2))
 
-    if com is not None:
-        com_pos = com[frame_idx]
-        # Draw the COM as a black dot
-        com_scatter = ax.scatter(com_pos[0], com_pos[1], com_pos[2], s=200, c='black', alpha=0.9,
-               edgecolors='black', linewidth=1, label='COM')
-        # Draw an X marker at the COM position
-        com_x_marker = ax.scatter(com_pos[0], com_pos[1], com_pos[2], s=300, c='red', marker='x', linewidth=3)
+    if com is not None and len(com) > frame_idx:
+        com_pos = np.asarray(com[frame_idx])
+        if np.all(np.isfinite(com_pos[:3])):
+            # Draw the COM as a black dot
+            com_scatter = ax.scatter(com_pos[0], com_pos[1], com_pos[2], s=200, c='black', alpha=0.9,
+                   edgecolors='black', linewidth=1, label='COM')
+            # Draw an X marker at the COM position
+            com_x_marker = ax.scatter(com_pos[0], com_pos[1], com_pos[2], s=300, c='red', marker='x', linewidth=3)
     
     # Labels
     ax.set_xlabel('X (mm)', fontsize=12)
@@ -88,14 +108,18 @@ def init_3d_artists(ax, positions, com=None):
     # ax.set_title('Interactive cmj Viewer - Drag Slider to Navigate', fontsize=14, fontweight='bold')
     ax.set_box_aspect([1, 1, 1])
 
-    # Axis
+    # Axis (robust)
     center, max_range = _compute_axis_limits(positions)
     ax.set_xlim([center[0] - max_range/2, center[0] + max_range/2])
     ax.set_ylim([center[1] - max_range/2, center[1] + max_range/2])
     ax.set_zlim([center[2] - max_range/2, center[2] + max_range/2])
 
     # Frame counter
-    n_frames = len(positions['pelvis'])
+    # Determine available frame count robustly
+    if positions:
+        n_frames = int(min(len(v) for v in positions.values() if hasattr(v, '__len__') and len(v) > 0))
+    else:
+        n_frames = 0
     frame_text = ax.text2D(0.02, 0.81, f"Frame: 0/{n_frames-1}", 
                            transform=ax.transAxes, fontsize=12, color='black',
                            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
