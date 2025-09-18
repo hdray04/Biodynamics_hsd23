@@ -3,8 +3,7 @@ import ezc3d
 myjog = ezc3d.c3d("/Users/harrietdray/Biodynamics/Harriet_c3d/Jog-001/pose_filt_0.c3d")
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import signal
-from src.com_force import compute_whole_body_com_fixed
+from mpl_toolkits.mplot3d import Axes3D
 
 
 #Extract 4x4 transformatino matrices for each joint across data specified 
@@ -16,7 +15,7 @@ def extract_matrices_final(myjog, labels):
     
     matrices_dict = {} # Dictionary to hold matrices for each joint
     n_joints = rotation_data.shape[2]  # 19 joints
-    # _n_frames = rotation_data.shape[3]  # frames (unused)
+    n_frames = rotation_data.shape[3]  # 547 frames
     
     
     for joint_idx in range(n_joints):
@@ -43,161 +42,8 @@ def extract_positions_from_matrices(matrices_dict):
     
     return positions
 
-def _normalize_positions_keys(positions):
-    """Normalize joint keys to pelvis, l_foot, r_foot when present."""
-    norm = {}
-    for name, arr in positions.items():
-        key = name.lower()
-        if 'pelvis' in key:
-            norm['pelvis'] = arr
-        elif ('left' in key or key.startswith('l_')) and 'foot' in key:
-            norm['l_foot'] = arr
-        elif ('right' in key or key.startswith('r_')) and 'foot' in key:
-            norm['r_foot'] = arr
-    return norm
-
-def _infer_sampling_rate(c3d_obj, default=100.0):
-    try:
-        rate = c3d_obj['parameters']['POINT']['RATE']['value']
-        if isinstance(rate, (list, tuple, np.ndarray)):
-            return float(rate[0])
-        return float(rate)
-    except Exception:
-        pass
-    try:
-        rate = c3d_obj['parameters']['ANALOG']['RATE']['value']
-        if isinstance(rate, (list, tuple, np.ndarray)):
-            return float(rate[0])
-        return float(rate)
-    except Exception:
-        pass
-    return float(default)
-
-def _map_to_utils_segment_keys(positions):
-    """Map Theia-style joint names to keys expected by src.utils.SEGMENTS.
-
-    Expected keys include: pelvis, head, l_thigh, l_shank, l_foot, l_toes,
-    r_thigh, r_shank, r_foot, r_toes, l_uarm, r_uarm, l_hand, r_hand.
-    """
-    out = {}
-    def norm(s):
-        return s.replace('_', '').replace('-', '').lower()
-    for name, arr in positions.items():
-        key = norm(name)
-        if 'pelvis' in key:
-            out['pelvis'] = arr
-        elif 'head' in key:
-            out['head'] = arr
-        elif ('leftupleg' in key) or ('leftthigh' in key) or ('lthigh' in key):
-            out['l_thigh'] = arr
-        elif ('rightupleg' in key) or ('rightthigh' in key) or ('rthigh' in key):
-            out['r_thigh'] = arr
-        elif ('leftleg' in key) or ('lshank' in key) or ('leftshank' in key):
-            out['l_shank'] = arr
-        elif ('rightleg' in key) or ('rshank' in key) or ('rightshank' in key):
-            out['r_shank'] = arr
-        elif ('leftfoot' in key) or ('lfoot' in key):
-            out['l_foot'] = arr
-        elif ('rightfoot' in key) or ('rfoot' in key):
-            out['r_foot'] = arr
-        elif ('lefttoe' in key) or ('lefttoes' in key) or ('ltoes' in key):
-            out['l_toes'] = arr
-        elif ('righttoe' in key) or ('righttoes' in key) or ('rtoes' in key):
-            out['r_toes'] = arr
-        elif ('leftupperarm' in key) or ('leftarm' in key) or ('luarm' in key):
-            out['l_uarm'] = arr
-        elif ('rightupperarm' in key) or ('rightarm' in key) or ('ruarm' in key):
-            out['r_uarm'] = arr
-        elif ('lefthand' in key) or ('lhand' in key):
-            out['l_hand'] = arr
-        elif ('righthand' in key) or ('rhand' in key):
-            out['r_hand'] = arr
-    return out
-
-def _ensure_mm(positions):
-    """Ensure units are millimeters by inspecting pelvis height magnitude.
-    If typical pelvis z is < 3, assume meters and convert to mm.
-    """
-    if 'pelvis' not in positions:
-        return positions
-    pel = np.asarray(positions['pelvis'])
-    if pel.size == 0:
-        return positions
-    z_span = float(np.nanmax(pel[:, 2]) - np.nanmin(pel[:, 2]))
-    if z_span < 3.0:  # likely meters
-        return {k: (np.asarray(v) * 1000.0) for k, v in positions.items()}
-    return positions
-
-def _basic_hs_to_from_heights(l_foot_z, r_foot_z, fs):
-    """Detect heel strikes (HS) as minima of foot Z; toe-offs (TO) via upward
-    velocity zero-crossings on toe/foot Z after each HS. Returns dict with
-    left/right HS/TO indices.
-    """
-    # Smooth
-    b, a = signal.butter(3, 6.0/(fs/2.0), 'low')
-    lz = signal.filtfilt(b, a, np.asarray(l_foot_z))
-    rz = signal.filtfilt(b, a, np.asarray(r_foot_z))
-
-    # HS on minima with adaptive prominence and minimum distance
-    def detect_hs(z):
-        p5, p95 = np.nanpercentile(z, [5, 95])
-        amp = max(1e-6, float(p95 - p5))
-        prominence = 0.15 * amp
-        min_dist = int(max(1, round(0.30 * fs)))
-        idx, _ = signal.find_peaks(-z, prominence=prominence, distance=min_dist)
-        if idx.size == 0:
-            idx, _ = signal.find_peaks(-z, prominence=0.5*prominence, distance=int(0.7*min_dist))
-        return idx.astype(int)
-
-    l_hs = detect_hs(lz)
-    r_hs = detect_hs(rz)
-
-    # TO as first upward vel zero-crossing after HS before next HS
-    def detect_to(z, hs_idx):
-        vel = np.gradient(z, 1.0/fs)
-        up = np.where((vel[:-1] <= 0) & (vel[1:] > 0))[0] + 1
-        to_idx = []
-        for i, s in enumerate(hs_idx):
-            e = hs_idx[i+1] if i+1 < len(hs_idx) else len(z)
-            cand = up[(up >= s) & (up < e)]
-            if cand.size:
-                to_idx.append(int(cand[0]))
-        return np.asarray(to_idx, int)
-
-    l_to = detect_to(lz, l_hs)
-    r_to = detect_to(rz, r_hs)
-
-    return {
-        'l_hs': l_hs, 'r_hs': r_hs,
-        'l_to': l_to, 'r_to': r_to,
-    }
-
-def plot_force_time_with_events(time, Fz, l_hs=None, r_hs=None, l_to=None, r_to=None, body_mass_kg=None):
-    fig, ax = plt.subplots(figsize=(10,4))
-    ax.plot(time, Fz, label='Predicted vertical GRF (N)')
-    if body_mass_kg:
-        bw = body_mass_kg * 9.81
-        ax.axhline(bw, color='gray', ls='--', lw=1, label='1 BW')
-    if l_hs is not None and len(l_hs):
-        ax.scatter(time[l_hs], Fz[l_hs], marker='v', c='C1', label='L HS')
-    if r_hs is not None and len(r_hs):
-        ax.scatter(time[r_hs], Fz[r_hs], marker='v', c='C2', label='R HS')
-    if l_to is not None and len(l_to):
-        ax.scatter(time[l_to], Fz[l_to], marker='^', c='C1', label='L TO')
-    if r_to is not None and len(r_to):
-        ax.scatter(time[r_to], Fz[r_to], marker='^', c='C2', label='R TO')
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Force (N)')
-    ax.set_title('Force–time curve from COM (jogging)')
-    ax.grid(True, alpha=0.3)
-    handles, labels = ax.get_legend_handles_labels()
-    if labels:
-        ax.legend()
-    plt.tight_layout()
-    return fig, ax
-
 def extract_angles(myjog, labels2):
-    angle_data = myjog['data']['points']  # Shape: (3, N_labels, frames)
+    angle_data = myjog['data']['points']  # Shape: (3, 19, 547)
     angle_indices = {
     'left_knee': labels2.index('LeftKneeAngles_Theia'),
     'right_knee': labels2.index('RightKneeAngles_Theia'),
@@ -307,7 +153,7 @@ def analyse_walk_movement(positions, angles):
         print("   No major gait deviations detected")
     
     # BASIC SPATIAL METRICS
-    print("\nSPATIAL METRICS:")
+    print(f"\nSPATIAL METRICS:")
     pelvis_forward = pelvis[:, 1]  # Y-axis (forward direction)
     total_distance = abs(pelvis_forward[-1] - pelvis_forward[0])
     avg_speed = total_distance / frames
@@ -336,63 +182,20 @@ def analyse_walk_movement(positions, angles):
         'warnings': warnings
     }
 
-"""
-Execution: analysis + COM-based force and gait cycle
-"""
-# Labels
-labels_rot = myjog['parameters']['ROTATION']['LABELS']['value']
-labels_pts = myjog['parameters']['POINT']['LABELS']['value']
-fs = _infer_sampling_rate(myjog, default=100.0)
-BODY_MASS_KG = 54.0
-
-# Positions from ROTATION 4x4 matrices
-matrices = extract_matrices_final(myjog, labels_rot)
-positions_all = extract_positions_from_matrices(matrices)
-positions = _normalize_positions_keys(positions_all)
-
-# Angles (if available in labels)
-try:
-    angles = extract_angles(myjog, labels_pts)
-except Exception as e:
-    print("Angle extraction issue:", e)
-    angles = None
-
-# COM-derived force
-try:
-    seg_positions = _map_to_utils_segment_keys(positions_all)
-    seg_positions = _ensure_mm(seg_positions)
-    com_out = compute_whole_body_com_fixed(seg_positions, BODY_MASS_KG, fs, cutoff_freq=6.0)
-    F_ext_smooth = com_out['F_ext_smooth']
-    # vertical component; Theia Z is usually vertical
-    Fz = F_ext_smooth[:, 2]
-    time = np.arange(Fz.shape[0]) / fs
-except Exception as e:
-    print("COM/force computation failed:", e)
-    Fz = None
-
-# Gait events from foot heights
-if {'l_foot','r_foot'}.issubset(positions):
-    lz = positions['l_foot'][:, 2]
-    rz = positions['r_foot'][:, 2]
-    ev = _basic_hs_to_from_heights(lz, rz, fs)
-    l_hs, r_hs, l_to, r_to = ev['l_hs'], ev['r_hs'], ev['l_to'], ev['r_to']
-else:
-    l_hs = r_hs = l_to = r_to = np.array([], int)
-
-# Print basic summary
+# EXECUTION CODE (OUTSIDE THE FUNCTION)
 print("Processing gait data...")
-if angles is not None:
-    res = analyse_walk_movement(positions, angles)
-    if res:
-        print("\nSUMMARY:")
-        print(f"Knee symmetry: {res['knee_symmetry']:.3f}")
-        print(f"Hip symmetry: {res['hip_symmetry']:.3f}")
-        print(f"Jogging speed (pelvis): {res['avg_speed']:.2f} mm/frame")
 
-# Plot force–time with events
-if Fz is not None:
-    plot_force_time_with_events(time, Fz, l_hs, r_hs, l_to, r_to, body_mass_kg=BODY_MASS_KG)
-    plt.show()
+# Run the analysis
+results = analyse_walk_movement(positions, angles)
+
+# Print summary
+if results:
+    print(f"\nSUMMARY:")
+    print(f"Analysis completed successfully")
+    print(f"Knee symmetry: {results['knee_symmetry']:.3f}")
+    print(f"Hip symmetry: {results['hip_symmetry']:.3f}")
+    print(f"Jogging speed: {results['avg_speed']:.2f} mm/frame")
+
 
 def analyse_walk_movement(positions, angles):
     required_joints = ['pelvis', 'l_foot', 'r_foot']
@@ -455,3 +258,22 @@ def analyse_walk_movement(positions, angles):
     
     print(f"   Knee ROM Symmetry: {knee_symmetry:.3f} (1.0 = perfect)")
     print(f"   Hip ROM Symmetry:  {hip_symmetry:.3f} (1.0 = perfect)")
+
+    print("Processing gait data...")
+
+# Extract matrices and positions
+matrices = extract_matrices_final(myjog, labels)
+positions = extract_positions_from_matrices(matrices)
+
+# Extract angles  
+angles = extract_angles(myjog, labels2)
+
+# Run the analysis
+results = analyse_walk_movement(positions, angles)
+
+# Print summary
+if results:
+    print(f"\nSUMMARY:")
+    print(f"Analysis completed successfully")
+
+
