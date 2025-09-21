@@ -1,6 +1,7 @@
 import ezc3d
 import numpy as np
 import re
+import matplotlib.pyplot as plt
 
 # Update these paths if needed
 cmj_1 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_CMJ1.c3d")
@@ -63,6 +64,7 @@ if quiet_n > 0 and np.median(Fz_total[:quiet_n]) < 0:
 print(f"Total Fz: samples={Fz_total.size}, dt={1.0/fs_an:.6f} s")
 
 
+
 pelvis_i = labels.index('LPSI')
 z = points[2, pelvis_i, :]
 standing_z = np.mean(z[:200])
@@ -72,27 +74,64 @@ print(f"cmj_1: Standing Z = {standing_z:.2f}, Max Z = {max_z:.2f}, Jump Height =
 
 
 g = 9.81
+fs = point_rate
 dt = float(np.mean(np.diff(t_an)))
 quiet_n = int(0.5 * fs_an)
 BW = float(np.median(Fz_total[:quiet_n]))
 m = BW / g
+Fnet = Fz_total - BW
 print(f"Body weight = {BW:.1f} N")
 
-thresh_N = 30
-contact = Fz_total > thresh_N
-edges = np.where((contact[:-1] == True) & (contact[1:] == False))[0]
-if len(edges) == 0:
-    raise RuntimeError("No take-off detected. Adjust threshold or quiet window.")
-to_idx = int(edges[0])
+thresh_N = 150
+contact = Fz_total < thresh_N
+velocity = np.cumsum(Fnet*dt) / m
+conc_start = next((i for i in range(1, len(velocity))
+                   if velocity[i-1] < 0 and velocity[i] >= 0), None)
+#takeoff_idx = np.where(Fz_total < thresh_N)[0][0]
+velocity -= velocity[conc_start]
+stay = max(int(0.05*fs), 1)
+TO = next((i for i in range(conc_start+1, len(Fz_total)-stay)
+               if contact[i] and np.all(contact[i:i+stay])), None)
+if TO is None:
+        raise ValueError("Take-off not found; adjust threshold/stay window.")
 
-Fnet = Fz_total - BW
-a = Fnet[:to_idx+1] / m
-v_to = float(np.trapz(a, dx=dt))
+
+land_idx = next((i for i in range(TO+1, len(contact)-stay) if ~contact[i] and np.all(~contact[i:i+stay])), None)
+if land_idx:
+    t_flight = t_an[land_idx] - t_an[TO]
+    h_flight = (g * t_flight**2) / 8
+    print(f"Flight time: {t_flight:.3f} s, Height (flight): {h_flight:.3f} m")
+#a = Fnet[conc_start:TO+1] / m
+v_to = velocity[TO]
 h = (v_to * v_to) / (2 * g)
 
-print(f"Take-off @ {t_an[to_idx]:.3f}s | v_to={v_to:.2f} m/s | height={h:.3f} m | mass={m:.1f} kg")
+print(f"Take-off @ {t_an[TO]:.3f}s | v_to={v_to:.2f} m/s | height={h:.3f} m | mass={m:.1f} kg")
 
 
+idx_max_f = conc_start 
+idx_to = TO
+n = len(forceplates)
+rows, cols = 2, 2
+fig, axs = plt.subplots(rows, cols, figsize=(12, 8))
+axes = axs.ravel()
+for k in range(rows*cols):
+    ax = axes[k]
+    if k < n:
+        Fz = forceplates[k]['F'][2, :]
+        Fz = -Fz
+        ax.plot(t_an, Fz, lw=1.0)
+        ax.axvline(t_an[idx_max_f], color='r', linestyle='--', label='conc_start')
+        ax.axvline(t_an[idx_to], color='g', linestyle='--', label='take-off')
+        ax.set_title(f"Force Plate {k+1}")
+        ax.set_ylabel("Fz (N)")
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+    else:
+        ax.axis('off')
 
-
+axes[-2].set_xlabel("Time (s)")
+axes[-1].set_xlabel("Time (s)")
+fig.suptitle("Force–Time (Vertical GRF) per Force Plate", y=0.98)
+fig.tight_layout()
+plt.show()
 

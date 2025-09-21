@@ -212,7 +212,7 @@ def plot_3d(positions, com=None):
 
 
 if __name__ == "__main__": # this only runs when the script is executed directly
-    filepath = "/Users/adamdray/Downloads/Harriet_c3d/CMJ-002/pose_filt_0.c3d"
+    filepath = "/Users/harrietdray/Baseline/Tash_CMJ1.c3d"
     cmj_1, labels_rotation = utils.load_data(filepath)
     matrices_dict = utils.extract_matrices(cmj_1, labels_rotation)
     positions = utils.extract_positions_from_matrices(matrices_dict)
