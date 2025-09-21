@@ -61,7 +61,11 @@ if quiet_n > 0 and np.median(Fz_total[:quiet_n]) < 0:
     Fz_total = -Fz_total
 
 
-print(f"Total Fz: samples={Fz_total.size}, dt={1.0/fs_an:.6f} s")
+# plt.plot(Fz_total)
+# plt.show()
+
+
+print(f"Total Fz: samples={Fz_total.size}, Frame rate = {fs_an:.1f} Hz, dt={1.0/fs_an:.6f} s")
 
 
 
@@ -74,41 +78,51 @@ print(f"cmj_1: Standing Z = {standing_z:.2f}, Max Z = {max_z:.2f}, Jump Height =
 
 
 g = 9.81
-fs = point_rate
-dt = float(np.mean(np.diff(t_an)))
-quiet_n = int(0.5 * fs_an)
+fs = fs_an
+dt = 1.0 / fs
+print(f"Point rate = {fs:.1f} Hz, dt = {dt:.6f} s")
+quiet_n = int(0.5 * fs)
 BW = float(np.median(Fz_total[:quiet_n]))
 m = BW / g
-Fnet = Fz_total - BW
 print(f"Body weight = {BW:.1f} N")
+
 
 thresh_N = 150
 contact = Fz_total < thresh_N
-velocity = np.cumsum(Fnet*dt) / m
-conc_start = next((i for i in range(1, len(velocity))
-                   if velocity[i-1] < 0 and velocity[i] >= 0), None)
-#takeoff_idx = np.where(Fz_total < thresh_N)[0][0]
-velocity -= velocity[conc_start]
 stay = max(int(0.05*fs), 1)
-TO = next((i for i in range(conc_start+1, len(Fz_total)-stay)
+TO = next((i for i in range(100, len(Fz_total)-stay)
                if contact[i] and np.all(contact[i:i+stay])), None)
 if TO is None:
         raise ValueError("Take-off not found; adjust threshold/stay window.")
 
 
+
+
+
+# FLIGHT TIME: LANDING CALC
 land_idx = next((i for i in range(TO+1, len(contact)-stay) if ~contact[i] and np.all(~contact[i:i+stay])), None)
 if land_idx:
     t_flight = t_an[land_idx] - t_an[TO]
     h_flight = (g * t_flight**2) / 8
     print(f"Flight time: {t_flight:.3f} s, Height (flight): {h_flight:.3f} m")
-#a = Fnet[conc_start:TO+1] / m
-v_to = velocity[TO]
+
+
+#IMPULSE 
+concentric_begin = np.argmax(Fz_total[100:TO]) + 100
+idx_max_f = concentric_begin 
+idx_to = TO
+fs = fs_an
+dt = 1.0 / fs
+F = Fz_total[idx_max_f:idx_to+1] 
+impulse = np.trapezoid(F, dx=dt)
+v_to = impulse / m
 h = (v_to * v_to) / (2 * g)
+h = h * 1000  # convert to mm
 
-print(f"Take-off @ {t_an[TO]:.3f}s | v_to={v_to:.2f} m/s | height={h:.3f} m | mass={m:.1f} kg")
+print(f"Take-off @ {t_an[TO]:.3f}s | v_to={v_to:.2f} m/s | height={h:.3f} mm | mass={m:.1f} kg")
 
 
-idx_max_f = conc_start 
+idx_max_f = concentric_begin 
 idx_to = TO
 n = len(forceplates)
 rows, cols = 2, 2
