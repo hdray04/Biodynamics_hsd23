@@ -74,28 +74,25 @@ print(f"cmj_1: Standing Z = {standing_z:.2f}, Max Z = {max_z:.2f}, Jump Height =
 g = 9.81
 dt = float(np.mean(np.diff(t_an)))
 quiet_n = int(0.5 * fs_an)
+BW = float(np.median(Fz_total[:quiet_n]))
+m = BW / g
+print(f"Body weight = {BW:.1f} N")
 
-# Bodyweight in these units ≈ g
-BW_spec = float(np.median(Fz_total[:quiet_n]))  # ~9.81
+thresh_N = 30
+contact = Fz_total > thresh_N
+edges = np.where((contact[:-1] == True) & (contact[1:] == False))[0]
+if len(edges) == 0:
+    raise RuntimeError("No take-off detected. Adjust threshold or quiet window.")
+to_idx = int(edges[0])
 
-# Contact detection with relative threshold
-thresh = max(1.0, 0.05 * BW_spec)               # m/s^2
-contact = Fz_total > thresh
-rise = np.where((~contact[:-1]) & (contact[1:]))[0]
-fall = np.where(( contact[:-1]) & (~contact[1:]))[0]
-if rise.size == 0 or fall.size == 0:
-    raise RuntimeError("No stance interval found.")
-to_idx = int(fall[0])
-td_idx = int(rise[rise < to_idx][-1]) if np.any(rise < to_idx) else 0
+Fnet = Fz_total - BW
+a = Fnet[:to_idx+1] / m
+v_to = float(np.trapz(a, dx=dt))
+h = (v_to * v_to) / (2 * g)
 
-# Net acceleration = (Fz_spec - BW_spec)
-a = (Fz_total - BW_spec)
-# small bias guard
-a -= float(np.mean(a[:quiet_n]))
+print(f"Take-off @ {t_an[to_idx]:.3f}s | v_to={v_to:.2f} m/s | height={h:.3f} m | mass={m:.1f} kg")
 
-# Integrate over stance
-v_to = float(np.trapezoid(a[td_idx:to_idx+1], t_an[td_idx:to_idx+1]))  # m/s
-h = v_to*v_to/(2*g)
-print(f"TD {t_an[td_idx]:.3f}s | TO {t_an[to_idx]:.3f}s | v_to={v_to:.2f} m/s | h={h:.3f} m")
+
+
 
 
