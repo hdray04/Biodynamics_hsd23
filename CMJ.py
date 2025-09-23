@@ -11,8 +11,11 @@ and analyze only that trial.
 """
 
 # Load only cmj_1
-cmj_1 = ezc3d.c3d("/Users/harrietdray/Pilot - Tash_c3d - Sorted/Tash_SLVJ1_right/Take 2025-09-12 01-49-57 PM-009/pose_filt_0.c3d")
+cmj_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_CMJ1/Take 2025-09-12 01-49-57 PM-002/pose_filt_0.c3d')
 params = cmj_1['parameters']
+fs = 100
+time = np.arange(cmj_1['data']['points'].shape[2]) / fs
+
 print("Param groups:", list(params.keys()))
 
 def find_any_angle_fields(params):
@@ -69,39 +72,6 @@ def _find_angle_like(params):
                 pass
     return hits
 
-def check_additional_trials():
-    paths = [
-        "/Users/harrietdray/Pilot - Tash_c3d - Sorted/Tash_CMJ2/Take 2025-09-12 01-49-57 PM-003/pose_filt_0.c3d",
-        "/Users/harrietdray/Pilot - Tash_c3d - Sorted/Tash_CMJ3/Take 2025-09-12 01-49-57 PM-004/pose_filt_0.c3d",
-    ]
-    for p in paths:
-        try:
-            c3d = ezc3d.c3d(p)
-            params = c3d['parameters']
-            point_labels = params.get('POINT', {}).get('LABELS', {}).get('value', []) or []
-            rot_labels = params.get('ROTATION', {}).get('LABELS', {}).get('value', []) or []
-            units2 = params.get('POINT', {}).get('UNITS', {}).get('value', []) or []
-            print("\n=== Diagnostics for:", p)
-            print("  Units:", units2)
-            print("  POINT.LABELS count:", len(point_labels))
-            if point_labels:
-                print("   sample:", point_labels[:10])
-            print("  ROTATION.LABELS count:", len(rot_labels))
-            if rot_labels:
-                print("   sample:", rot_labels[:10])
-            hits = _find_angle_like(params)
-            if hits:
-                print("  Angle-like fields found:")
-                for g, f, sample in hits:
-                    print("   ", g, f, "sample:", sample)
-            else:
-                print("  No angle-like fields found in parameters.")
-        except Exception as e:
-            print("\n=== Diagnostics for:", p)
-            print("  ERROR:", e)
-
-if RUN_DIAGNOSTICS:
-    check_additional_trials()
 
 def extract_3d_angles(angle_data, labels):
     angle_indices = {
@@ -177,26 +147,31 @@ def _find_label_key(candidates, available_keys):
             return k
     return None
 
-def find_initial_foot_contact(matrices_dict):
+def find_initial_foot_contact(matrices_dict, standing_frames=10, threshold=5):
     positions = extract_positions_from_matrices(matrices_dict)
-    # Using right foot to determine contact; resolve best-matching key
-    foot_key = _find_label_key(['r_foot', 'right_foot', 'rightfoot', 'rfoot'], positions.keys())
-    if foot_key is None:
-        raise KeyError(f"Could not find a right foot key in positions. Available: {list(positions.keys())}")
-    right_foot_positions = positions[foot_key]  # (n_frames, 3)
-    z_coordinates = right_foot_positions[:, 2]
-    min_z = float(np.min(z_coordinates))
-    print("Min z (r_foot):", min_z)
-    initial_contact_frame = int(np.argmin(z_coordinates))
+    # Using right toe to determine contact; resolve best-matching key
+    toe_key = _find_label_key(['r_toe', 'right_toe', 'righttoe', 'rtoe'], positions.keys())
+    if toe_key is None:
+        raise KeyError(f"Could not find a right toe key in positions. Available: {list(positions.keys())}")
+    right_toe_positions = positions[toe_key]  # (n_frames, 3)
+    z_coordinates = right_toe_positions[:, 2]
+    # Calculate standing level as mean of first N frames
+    standing_z = np.mean(z_coordinates[:standing_frames])
+    # Find peak (highest point, i.e., flight apex)
+    peak_frame = np.argmax(z_coordinates)
+    # After peak, look for first frame where toe returns to standing_z (within threshold)
+    after_peak = np.arange(peak_frame, len(z_coordinates))
+    back_to_standing = after_peak[np.where(np.abs(z_coordinates[peak_frame:] - standing_z) < threshold)[0]]
+    if len(back_to_standing) == 0:
+        # Never returns, fallback to last frame
+        return int(len(z_coordinates) - 1)
+    initial_contact_frame = int(back_to_standing[0])
     return initial_contact_frame
 
-all_matrices = extract_matrices(rotation_data, labels_rotation)
+initial_contact_frame = find_initial_foot_contact(extract_matrices(rotation_data, labels_rotation))
 
 #### Plotting the knee angles at initial contact for each trial
-####Knee valgus/varus('-'move outwards) should be within -5 to 10 degrees
-### Foot progression angles: -10 (toe in) to +20 (toe out) should typically be toe out   
-initial_contact_frame = find_initial_foot_contact(all_matrices)
-print(f"cmj_1: Initial foot contact at frame {initial_contact_frame}")
+####Knee valgus/varus('-'move outwards) should be within -5 to 10 degre
 
 # Print angles at initial contact only if angles were extracted
 if all_angles_3d:
@@ -220,146 +195,181 @@ if all_angles_3d:
 else:
     print("Angle channels unavailable; only position-based metrics computed.")
 
-def calculate_jump_height_from_foot(matrices_dict, foot_label='r_foot', standing_frames=10):
-    positions = extract_positions_from_matrices(matrices_dict)
-    if foot_label not in positions:
-        print(f"Warning: {foot_label} not found in cmj_1")
-        return None
-    z = positions[foot_label][:, 2]
-    standing_z = np.mean(z[:standing_frames])
-    max_z = np.max(z)
-    jump_height = max_z - standing_z
-    print(f"cmj_1: Standing Z = {standing_z:.2f}, Max Z = {max_z:.2f}, Jump Height = {jump_height:.2f}, mm")
-    return jump_height
 
-# Example usage (single trial)
-jump_height = calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_frames=10)
+left_hip_flexion = all_angles_3d['left_hip']['sagittal'][initial_contact_frame]
+right_hip_flexion = all_angles_3d['right_hip']['sagittal'][initial_contact_frame]
+print(f"Left Hip Flexion at initial contact = {left_hip_flexion}")
+print(f"Right Hip Flexion at initial contact = {right_hip_flexion}")
 
-
-'''
-import matplotlib.pyplot as plt
-def plot_annotated_foot_height(all_matrices, trial_name, foot_label='r_foot', standing_frames=10):
-    all_positions = extract_positions_from_matrices(all_matrices)
-    z = all_positions[trial_name][foot_label][:, 2]
-    frames = np.arange(len(z))
-    standing_z = np.mean(z[:standing_frames])
-    max_z = np.max(z)
-    max_frame = np.argmax(z)
-    plt.figure(figsize=(10,5))
-    plt.plot(frames, z, label=f'{foot_label} Z-position')
-    plt.axhline(standing_z, color='green', linestyle='--', label='Standing Z')
-    plt.plot(max_frame, max_z, 'ro', label='Max Z')
-    plt.xlabel('Frame')
-    plt.ylabel('Vertical Position (mm)')
-    plt.title(f'Foot Height Over Time - {trial_name}')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-# Example usage:
-#plot_annotated_foot_height(all_matrices, 'trial_1', foot_label='r_foot')
-#plot_annotated_foot_height(all_matrices, 'trial_2', foot_label='r_foot')
-#plot_annotated_foot_height(all_matrices, 'trial_3', foot_label='r_foot')
-'''
-
-import numpy as np
+        # Peak knee flexion AFTER initial contact
+# Plot knee flexion over time after initial contact
 import matplotlib.pyplot as plt
 
-import numpy as np
-import matplotlib.pyplot as plt
+left_knee_flexion_trace = all_angles_3d['left_knee']['sagittal']
+right_knee_flexion_trace = all_angles_3d['right_knee']['sagittal']
 
-import numpy as np
-import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 5))
+plt.plot(time, left_knee_flexion_trace, label='Left Knee Flexion')
+plt.plot(time, right_knee_flexion_trace, label='Right Knee Flexion')
+plt.xlabel('Time')
+plt.ylabel('Knee Flexion (degrees)')
+plt.title('Knee Flexion Over Time (Full Trial)')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
 
-def detect_cmj_phases_height_based(all_positions, trial_name, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10):
-    pelvis_z = all_positions[trial_name][pelvis_marker][:, 2]
-    foot_z = all_positions[trial_name][foot_marker][:, 2]
-    n_frames = len(pelvis_z)
-    standing_z = np.mean(pelvis_z[:10])
-    movement_start = np.where(np.abs(pelvis_z - standing_z) > threshold)[0]
-    standing_end = movement_start[0] if len(movement_start) > 0 else 0
-    min_pelvis_z_frame = np.argmin(pelvis_z[standing_end:]) + standing_end
-    max_pelvis_z_frame = np.argmax(pelvis_z)  # PEAK HEIGHT
-    standing_foot_z = np.mean(foot_z[:10])
-    takeoff_candidates = np.where(foot_z[min_pelvis_z_frame:] > standing_foot_z + threshold)[0]
-    propulsion_end = takeoff_candidates[0] + min_pelvis_z_frame if len(takeoff_candidates) > 0 else n_frames - 1
-    landing_candidates = np.where(foot_z[propulsion_end:] < standing_foot_z + threshold)[0]
-    landing_start = landing_candidates[0] + propulsion_end if len(landing_candidates) > 0 else n_frames - 1
-    settle_candidates = np.where(np.abs(foot_z[landing_start:] - standing_foot_z) < threshold/2)[0]
-    landing_end = settle_candidates[0] + landing_start if len(settle_candidates) > 0 else n_frames - 1
-    phases = {
-        'standing_end': standing_end,
-        'descent_end': min_pelvis_z_frame,
-        'peak_height': max_pelvis_z_frame,
-        'propulsion_end': propulsion_end,
-        'landing_start': landing_start,
-        'landing_end': landing_end
-    }
-    return phases
+# Find maximum knee flexion (most negative value) after frame 400 for left and right knees
+if all_angles_3d:
+    left_knee_flexion_trace = all_angles_3d['left_knee']['sagittal']
+    right_knee_flexion_trace = all_angles_3d['right_knee']['sagittal']
+    max_left_flexion = np.max(left_knee_flexion_trace[500:])
+    max_right_flexion = np.max(right_knee_flexion_trace[500:])
+    max_left_flexion_frame = np.argmax(left_knee_flexion_trace[500:]) + 500
+    max_right_flexion_frame = np.argmax(right_knee_flexion_trace[500:]) + 500
+    print(f"Max Left Knee Flexion after frame 500: {max_left_flexion:.2f} deg at frame {max_left_flexion_frame}")
+    print(f"Max Right Knee Flexion after frame 500: {max_right_flexion:.2f} deg at frame {max_right_flexion_frame}")
+else:
+    print("Knee flexion data unavailable for max flexion calculation.")
+#     positions = extract_positions_from_matrices(matrices_dict)
+#     if foot_label not in positions:
+#         print(f"Warning: {foot_label} not found in cmj_1")
+#         return None
+#     z = positions[foot_label][:, 2]
+#     standing_z = np.mean(z[:standing_frames])
+#     max_z = np.max(z)
+#     jump_height = max_z - standing_z
+#     print(f"cmj_1: Standing Z = {standing_z:.2f}, Max Z = {max_z:.2f}, Jump Height = {jump_height:.2f}, mm")
+#     return jump_height
 
-def get_phase_intervals(phases, n_frames):
-    return [
-        ("Standing", 0, phases['standing_end']),
-        ("Descent", phases['standing_end'], phases['descent_end']),
-        ("Propulsion", phases['descent_end'], phases['propulsion_end']),
-        ("Flight", phases['propulsion_end'], phases['landing_start']),
-        ("Landing", phases['landing_start'], phases['landing_end']),
-        ("Settle", phases['landing_end'], n_frames-1)
-    ]
+# # Example usage (single trial)
+# jump_height = calculate_jump_height_from_foot(all_matrices, foot_label='r_foot', standing_frames=10)
 
-def plot_aligned_cmj_trials_on_peak(all_positions, trial_names, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10, window=100):
-    plt.figure(figsize=(16, 7))
-    colors = plt.cm.tab10.colors
-    for idx, trial in enumerate(trial_names):
-        phases = detect_cmj_phases_height_based(all_positions, trial, pelvis_marker, foot_marker, threshold)
-        pelvis_z = all_positions[trial][pelvis_marker][:, 2]
-        foot_z = all_positions[trial][foot_marker][:, 2]
-        n_frames = len(pelvis_z)
-        peak_frame = phases['peak_height']
-        # Extract window around peak
-        start = max(0, peak_frame - window)
-        end = min(n_frames, peak_frame + window)
-        x_vals = np.arange(start - peak_frame, end - peak_frame)
-        plt.plot(x_vals, pelvis_z[start:end], label=f"{trial} pelvis", color=colors[idx % len(colors)], linestyle='-')
-        plt.plot(x_vals, foot_z[start:end], label=f"{trial} foot", color=colors[idx % len(colors)], linestyle='--')
 
-        # Shade and label phases for this trial
-        phase_intervals = get_phase_intervals(phases, n_frames)
-        phase_colors = ["#f0f0f0", "#ffe0e0", "#e0ffe0", "#d0f5ff", "#ffe0b2", "#f9f9f9"]
-        for i, (phase, p_start, p_end) in enumerate(phase_intervals):
-            # Only shade if within visible window
-            if p_end >= start and p_start <= end:
-                x1 = max(p_start - peak_frame, x_vals[0])
-                x2 = min(p_end - peak_frame, x_vals[-1])
-                plt.axvspan(x1, x2, color=phase_colors[i], alpha=0.13, lw=0)
+# '''
+# import matplotlib.pyplot as plt
+# def plot_annotated_foot_height(all_matrices, trial_name, foot_label='r_foot', standing_frames=10):
+#     all_positions = extract_positions_from_matrices(all_matrices)
+#     z = all_positions[trial_name][foot_label][:, 2]
+#     frames = np.arange(len(z))
+#     standing_z = np.mean(z[:standing_frames])
+#     max_z = np.max(z)
+#     max_frame = np.argmax(z)
+#     plt.figure(figsize=(10,5))
+#     plt.plot(frames, z, label=f'{foot_label} Z-position')
+#     plt.axhline(standing_z, color='green', linestyle='--', label='Standing Z')
+#     plt.plot(max_frame, max_z, 'ro', label='Max Z')
+#     plt.xlabel('Frame')
+#     plt.ylabel('Vertical Position (mm)')
+#     plt.title(f'Foot Height Over Time - {trial_name}')
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
+# # Example usage:
+# #plot_annotated_foot_height(all_matrices, 'trial_1', foot_label='r_foot')
+# #plot_annotated_foot_height(all_matrices, 'trial_2', foot_label='r_foot')
+# #plot_annotated_foot_height(all_matrices, 'trial_3', foot_label='r_foot')
+# '''
+
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# def detect_cmj_phases_height_based(all_positions, trial_name, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10):
+#     pelvis_z = all_positions[trial_name][pelvis_marker][:, 2]
+#     foot_z = all_positions[trial_name][foot_marker][:, 2]
+#     n_frames = len(pelvis_z)
+#     standing_z = np.mean(pelvis_z[:10])
+#     movement_start = np.where(np.abs(pelvis_z - standing_z) > threshold)[0]
+#     standing_end = movement_start[0] if len(movement_start) > 0 else 0
+#     min_pelvis_z_frame = np.argmin(pelvis_z[standing_end:]) + standing_end
+#     max_pelvis_z_frame = np.argmax(pelvis_z)  # PEAK HEIGHT
+#     standing_foot_z = np.mean(foot_z[:10])
+#     takeoff_candidates = np.where(foot_z[min_pelvis_z_frame:] > standing_foot_z + threshold)[0]
+#     propulsion_end = takeoff_candidates[0] + min_pelvis_z_frame if len(takeoff_candidates) > 0 else n_frames - 1
+#     landing_candidates = np.where(foot_z[propulsion_end:] < standing_foot_z + threshold)[0]
+#     landing_start = landing_candidates[0] + propulsion_end if len(landing_candidates) > 0 else n_frames - 1
+#     settle_candidates = np.where(np.abs(foot_z[landing_start:] - standing_foot_z) < threshold/2)[0]
+#     landing_end = settle_candidates[0] + landing_start if len(settle_candidates) > 0 else n_frames - 1
+#     phases = {
+#         'standing_end': standing_end,
+#         'descent_end': min_pelvis_z_frame,
+#         'peak_height': max_pelvis_z_frame,
+#         'propulsion_end': propulsion_end,
+#         'landing_start': landing_start,
+#         'landing_end': landing_end
+#     }
+#     return phases
+
+# def get_phase_intervals(phases, n_frames):
+#     return [
+#         ("Standing", 0, phases['standing_end']),
+#         ("Descent", phases['standing_end'], phases['descent_end']),
+#         ("Propulsion", phases['descent_end'], phases['propulsion_end']),
+#         ("Flight", phases['propulsion_end'], phases['landing_start']),
+#         ("Landing", phases['landing_start'], phases['landing_end']),
+#         ("Settle", phases['landing_end'], n_frames-1)
+#     ]
+
+# def plot_aligned_cmj_trials_on_peak(all_positions, trial_names, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10, window=100):
+#     plt.figure(figsize=(16, 7))
+#     colors = plt.cm.tab10.colors
+#     for idx, trial in enumerate(trial_names):
+#         phases = detect_cmj_phases_height_based(all_positions, trial, pelvis_marker, foot_marker, threshold)
+#         pelvis_z = all_positions[trial][pelvis_marker][:, 2]
+#         foot_z = all_positions[trial][foot_marker][:, 2]
+#         n_frames = len(pelvis_z)
+#         peak_frame = phases['peak_height']
+#         # Extract window around peak
+#         start = max(0, peak_frame - window)
+#         end = min(n_frames, peak_frame + window)
+#         x_vals = np.arange(start - peak_frame, end - peak_frame)
+#         plt.plot(x_vals, pelvis_z[start:end], label=f"{trial} pelvis", color=colors[idx % len(colors)], linestyle='-')
+#         plt.plot(x_vals, foot_z[start:end], label=f"{trial} foot", color=colors[idx % len(colors)], linestyle='--')
+
+#         # Shade and label phases for this trial
+#         phase_intervals = get_phase_intervals(phases, n_frames)
+#         phase_colors = ["#f0f0f0", "#ffe0e0", "#e0ffe0", "#d0f5ff", "#ffe0b2", "#f9f9f9"]
+#         for i, (phase, p_start, p_end) in enumerate(phase_intervals):
+#             # Only shade if within visible window
+#             if p_end >= start and p_start <= end:
+#                 x1 = max(p_start - peak_frame, x_vals[0])
+#                 x2 = min(p_end - peak_frame, x_vals[-1])
+#                 plt.axvspan(x1, x2, color=phase_colors[i], alpha=0.13, lw=0)
             
 
-        # Draw vertical alignment line at peak
+#         # Draw vertical alignment line at peak
 
 
-    plt.xlabel('Frames (relative to peak pelvis height)')
-    plt.ylabel('Vertical Position (mm)')
-    plt.title('CMJ Trials: Aligned on Peak Pelvis Height (with phase regions)')
-    plt.legend(ncol=2)
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+#     plt.xlabel('Frames (relative to peak pelvis height)')
+#     plt.ylabel('Vertical Position (mm)')
+#     plt.title('CMJ Trials: Aligned on Peak Pelvis Height (with phase regions)')
+#     plt.legend(ncol=2)
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.show()
 
-# Example usage (multi-trial plot skipped in single-trial workflow)
+# # Example usage (multi-trial plot skipped in single-trial workflow)
+# # positions_cmj1 = extract_positions_from_matrices(all_matrices)
+# # plot an adapted single-trial view if needed
+
+
+
+# def print_cmj_phase_durations_single(positions_cmj1, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10):
+#     # Compute and print durations for cmj_1 only
+#     all_positions = {'cmj_1': positions_cmj1}
+#     phases = detect_cmj_phases_height_based(all_positions, 'cmj_1', pelvis_marker, foot_marker, threshold)
+#     n_frames = len(positions_cmj1[pelvis_marker])
+#     intervals = get_phase_intervals(phases, n_frames)
+#     print("cmj_1 phase intervals (frames):")
+#     for name, start, end in intervals:
+#         print(f"  {name}: {start} -> {end} (len {end-start})")
+
+# # Example usage (single-trial):
 # positions_cmj1 = extract_positions_from_matrices(all_matrices)
-# plot an adapted single-trial view if needed
-
-
-
-def print_cmj_phase_durations_single(positions_cmj1, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10):
-    # Compute and print durations for cmj_1 only
-    all_positions = {'cmj_1': positions_cmj1}
-    phases = detect_cmj_phases_height_based(all_positions, 'cmj_1', pelvis_marker, foot_marker, threshold)
-    n_frames = len(positions_cmj1[pelvis_marker])
-    intervals = get_phase_intervals(phases, n_frames)
-    print("cmj_1 phase intervals (frames):")
-    for name, start, end in intervals:
-        print(f"  {name}: {start} -> {end} (len {end-start})")
-
-# Example usage (single-trial):
-positions_cmj1 = extract_positions_from_matrices(all_matrices)
-print_cmj_phase_durations_single(positions_cmj1, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10)
+# print_cmj_phase_durations_single(positions_cmj1, pelvis_marker='pelvis', foot_marker='r_foot', threshold=10)

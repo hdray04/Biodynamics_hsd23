@@ -4,32 +4,29 @@ import re
 import matplotlib.pyplot as plt
 
 # Update these paths if needed
-cmj_1 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_CMJ1.c3d")
-cmj_2 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_CMJ2.c3d")
-cmj_3 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_CMJ3.c3d")
 slvj_left_1 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_SLVJ1_left.c3d")
 slvj_right_1 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_SLVJ1_right.c3d")
 
-print(cmj_2['data'].keys())
+print(slvj_left_1['data'].keys())
 
-points = cmj_3['data']['points']          # shape: (4, n_points, n_frames)
-labels = cmj_3['parameters']['POINT']['LABELS']['value']
-labels_rotation = cmj_3['parameters']['POINT']['ANGLES']['value']
-fps  = cmj_3['data']['analogs']              # dict with 'force','moment','cop'
-fps_labels = cmj_3['parameters']['ANALOG']['LABELS']['value']
-chan_matrix = cmj_3['parameters']['ANALOG']['USED']['value']
-point_rate = float(cmj_3['parameters']['POINT']['RATE']['value'][0])
-print("Rate check:", float(cmj_3['parameters']['ANALOG']['RATE']['value'][0]))
+points = slvj_left_1['data']['points']          # shape: (4, n_points, n_frames)
+labels = slvj_left_1['parameters']['POINT']['LABELS']['value']
+labels_rotation = slvj_left_1['parameters']['POINT']['ANGLES']['value']
+fps  = slvj_left_1['data']['analogs']              # dict with 'force','moment','cop'
+fps_labels = slvj_left_1['parameters']['ANALOG']['LABELS']['value']
+chan_matrix = slvj_left_1['parameters']['ANALOG']['USED']['value']
+point_rate = float(slvj_left_1['parameters']['POINT']['RATE']['value'][0])
+print("Rate check:", float(slvj_left_1['parameters']['ANALOG']['RATE']['value'][0]))
 n_frames = points.shape[2]
 time = np.arange(n_frames) / point_rate
 
 n_sub, n_chn, n_fr = fps.shape
-fs_an = float(cmj_3['header']['analogs']['frame_rate'])
+fs_an = float(slvj_left_1['header']['analogs']['frame_rate'])
 
 A = fps.transpose(1, 0, 2).reshape(n_chn, n_sub*n_fr)
 t_an = np.arange(A.shape[1]) / fs_an
 
-fps_params = cmj_3['parameters'].get('FORCE_PLATFORM', {})
+fps_params = slvj_left_1['parameters'].get('FORCE_PLATFORM', {})
 ch_values = np.array(fps_params['CHANNEL']['value'])
 if ch_values.ndim == 1:
     if ch_values.size % 6 != 0:
@@ -79,8 +76,12 @@ right_fp = forceplates[0]  # Right foot
 left_fp = forceplates[1]   # Left foot
 
 # Calculate LSI (Limb Symmetry Index) for Peak Fz
-peak_fz_right = np.max(-right_fp['F'][2, :]) / mass
-peak_fz_left = np.max(-left_fp['F'][2, :]) / mass
+Fz_right = -right_fp['F'][2, :] 
+Fz_right_norm = Fz_right - BW
+Fz_left = -left_fp['F'][2, :] 
+Fz_left_norm = Fz_left - BW
+peak_fz_right = np.max(Fz_right) / mass
+peak_fz_left = np.max(Fz_left) / mass
 
 LSI_of_Peak_Fz = (peak_fz_left / peak_fz_right) * 100  # Expressed as percentage
 
@@ -96,31 +97,18 @@ standing_z = np.mean(z[:200])
 max_z = np.max(z)
 jump_height = max_z - standing_z
 
-# Plot pelvis height (Z) over time
-plt.figure(figsize=(10, 4))
-plt.plot(time, z, label='Pelvis Height (Z)')
-plt.axhline(standing_z, color='g', linestyle='--', label='Standing Z')
-plt.axhline(max_z, color='r', linestyle='--', label='Max Z')
-plt.xlabel('Time (s)')
-plt.ylabel('Pelvis Height (mm)')
-plt.title('Pelvis Height Over Time')
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
-
 print("\n=== Marker Calculation ===")
 print(f"\tStanding Z: {standing_z:.2f} mm")
 print(f"\tMax Z: {max_z:.2f} mm")
 print(f"\n\tEstimated Jump Height: {jump_height:.2f} mm")
 
 
-# === DETERMINE TAKE-OFF & LANDING INDEX ===
+# === DETERMINE TAKE-OFF & LANDING INDEX - LEFT ===
 
 thresh_N = 0.05 * BW  # 5% body weight threshold
-contact = Fz_total < thresh_N
+contact = Fz_right < thresh_N
 stay = max(int(0.05*fs), 1) # minimum frames to confirm not noise
-idx_tako= next((i for i in range(stay, len(Fz_total)-stay)
+idx_tako= next((i for i in range(stay, len(Fz_right)-stay)
                if contact[i] and np.all(contact[i:i+stay])), None)
 idx_land = next((i for i in range(idx_tako+1, len(contact)-stay) if ~contact[i] and np.all(~contact[i:i+stay])), None)
 
@@ -169,11 +157,11 @@ def find_negative_drop(x, fs, window_ms=50, frac=0.9, eps=0.0, smooth_ms=1, end=
     idxs = np.where(s >= frac * w)[0]
     return int(idxs[0]) if idxs.size else None
 
-idx_v0 = find_negative_drop(Fz_total_norm, idx_tako)
+idx_v0 = find_negative_drop(Fz_right_norm, idx_tako)
 print(idx_v0)
 # idx_v0 = np.argmax(Fz_total_norm[100:idx_tako]) + 100 # start of concentric phase in contact phase
 
-impulse = np.trapezoid(Fz_total_norm[idx_v0:idx_tako+1], dx=dt) 
+impulse = np.trapezoid(Fz_right_norm[idx_v0:idx_tako+1], dx=dt)
 
 mass = BW / g
 
@@ -192,11 +180,11 @@ print(f"\n\tEstimated Jump Height: {height_mm:.2f} mm")
 
 # # Total force plot
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(t_an, Fz_total, lw=1.5, label='Fz_total')
+ax.plot(t_an, Fz_right, lw=1.5, label='Fz_right')
 ax.axvline(t_an[idx_v0], color='r', linestyle='--', label='conc_start')
 ax.axvline(t_an[idx_tako], color='g', linestyle='--', label='take-off')
 ax.axhline(BW, color='b', linestyle=':', label='Body Weight')
-ax.set_title("Total Vertical GRF (Fz_total)")
+ax.set_title("Total Vertical GRF (Fz_right)")
 ax.set_ylabel("Fz (N)")
 ax.set_xlabel("Time (s)")
 ax.grid(True, alpha=0.3)
@@ -257,19 +245,7 @@ for joint, sides in peak_flexion.items():
     for side, res in sides.items():
         print(f"{joint} {side}: {res['max_x']:.2f} deg at frame {res['frame']}")
 
-        # === Plot Knee Flexion (X axis) Over Time ===
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for knee in ['LKneeAngles', 'RKneeAngles']:
-            if knee in labels_rotation:
-                idx = labels.index(knee)
-                ax.plot(time, points[0, idx, :], label=f"{knee} Flexion (X)")
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Knee Flexion (deg)")
-        ax.set_title("Knee Flexion Angle Over Time")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
+
 # Print ankle angles at landing frame
 ankle_names = ['LAnkleAngles', 'RAnkleAngles']
 print("\n=== Ankle Angles at Landing Frame ===")

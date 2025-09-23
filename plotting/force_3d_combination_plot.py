@@ -33,12 +33,14 @@ def plot_evolution(ax, t, series_list, labels):
 
 if __name__ == "__main__":  # this only runs when the script is executed directly
     cutoff_freq = 6.0  # Hz
-    body_mass = 54.0  # kg, assumed body mass for the whole body COM calculation
+    body_mass = 65  # kg, assumed body mass for the whole body COM calculation
     fs = 100  # Hz
 
-    filepath = "/Users/harrietdray/Biodynamics/Harriet_c3d/walk-001/pose_filt_0.c3d"
-    cmj_1, labels_rotation = utils.load_data(filepath)
-    matrices_dict = utils.extract_matrices(cmj_1, labels_rotation)
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_SLDJ2_left/Take 2025-09-12 01-49-57 PM-014/pose_filt_0.c3d'
+    filepath = "/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/SLDJ1_right/Take 2025-09-12 01-49-57 PM-015/pose_filt_0.c3d"
+    
+    cmj, labels_rotation = utils.load_data(filepath)
+    matrices_dict = utils.extract_matrices(cmj, labels_rotation)
     positions = utils.extract_positions_from_matrices(matrices_dict)
     out = com_force.compute_whole_body_com_fixed(positions, body_mass, fs, cutoff_freq=cutoff_freq)
 
@@ -51,6 +53,25 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     # COM positions for 3D
     com = out["r_com"]
 
+    #COM jump height 
+
+    # For drop jump: jump height is max - min COM height between frames 200 and 270
+    com_window = com[160:230, 2]
+    com_min = np.min(com_window)
+    com_max = np.max(com_window)
+    jump_height = com_max - com_min
+    print(f"Drop jump height (max - min COM between frames 200-300): {jump_height:.3f} m")
+
+    # === SIMPLE PLOT: COM HEIGHT OVER TIME ===
+    plt.figure(figsize=(8, 4))
+    plt.plot(np.arange(com.shape[0]), com[:, 2], label='COM Height (Z)', color='purple')
+    plt.xlabel('Frames')
+    plt.ylabel('COM Height (m)')
+    plt.title('Center of Mass Height Over Time')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
     # === COMBINED PLOTTING ===
 
     fig = plt.figure(figsize=(16, 8))
@@ -65,6 +86,7 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     # Time series
     cursor = plot_evolution(ax_ts, t, [F_ext, F_ext_smooth], ["Raw COM Force (Z)", "Smooth COM Force (Z)"])
     ax_ts.set_title("COM Force Over Time (Z-axis)")
+    # Add a vertical line at frame 351
 
     # Instructions and layout
     plt.subplots_adjust(bottom=0.20, left=0.05, right=0.98, top=0.90, wspace=0.15, hspace=0.3)

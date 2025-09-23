@@ -79,10 +79,10 @@ def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=n
 if __name__ == "__main__":
 
     cutoff_freq = 6.0  # Hz
-    body_mass = 54.0  # kg, assumed body mass for the whole body COM calculation
+    body_mass = 65  # kg, assumed body mass for the whole body COM calculation
     fs = 100 # Hz
 
-    filepath = "/Users/harrietdray/Baseline/Tash_CMJ1.c3d"
+    filepath = "/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_SLDJ1_right/Take 2025-09-12 01-49-57 PM-016/pose_filt_0.c3d"
     cmj_1, labels_rotation = utils.load_data(filepath)
     matrices_dict = utils.extract_matrices(cmj_1, labels_rotation)
     positions = utils.extract_positions_from_matrices(matrices_dict)
@@ -100,10 +100,13 @@ if __name__ == "__main__":
     print(f"Sampling frequency: {fs} Hz")
     print(f"Body mass: {body_mass} kg")
 
+
     print("=== RESULTS ===")
     print(f"Position range (mm): {np.max(r_com[:,2]) - np.min(r_com[:,2]):.1f}")
-    print(f"Max velocity (mm/s): {np.max(v_com[:,2]):.1f}")
-    print(f"Max acceleration (mm/s²): {np.max(a_com[:,2]):.1f}")
+    print(f"Jump height (COM peak - standing): {np.max(r_com[:,2]) - np.median(r_com[:100,2]):.3f} m")
+    print(f"Max velocity (m/s): {np.max(v_com[:,2]) / 1000:.3f}")
+   
+    print(f"Max acceleration (m/s²): {np.max(a_com[:,2]) / 1000:.3f}")
     print(f"Max force (N): ")
     print(f"\t{np.max(F_ext[:,2]):.1f} (raw)")
     print(f"\t{np.max(F_ext_smooth[:,2]):.1f} (smooth)")
