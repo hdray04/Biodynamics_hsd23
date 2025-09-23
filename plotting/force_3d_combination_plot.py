@@ -37,8 +37,17 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     fs = 100  # Hz
 
     #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_SLDJ2_left/Take 2025-09-12 01-49-57 PM-014/pose_filt_0.c3d'
-    filepath = "/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/SLDJ1_right/Take 2025-09-12 01-49-57 PM-015/pose_filt_0.c3d"
-    
+    #filepath = "/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/SLDJ1_right/Take 2025-09-12 01-49-57 PM-015/pose_filt_0.c3d"
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_SLDJ1_right/Take 2025-09-12 01-49-57 PM-016/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/SLDJ3_right/Take 2025-09-12 01-49-57 PM-017/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_left_1/Take 2025-09-12 01-49-57 PM-022/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_left_3/Take 2025-09-12 01-49-57 PM-023/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Take 2025-09-12 01-49-57 PM-021-single_hop_left/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_left_2/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_right_1/Take 2025-09-12 01-49-57 PM-024/pose_filt_0.c3d'
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_right_1/Take 2025-09-12 01-49-57 PM-023/pose_filt_0.c3d'
+    filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_right_2/Take 2025-09-12 01-49-57 PM-025/pose_filt_0.c3d'
+
     cmj, labels_rotation = utils.load_data(filepath)
     matrices_dict = utils.extract_matrices(cmj, labels_rotation)
     positions = utils.extract_positions_from_matrices(matrices_dict)
@@ -53,25 +62,63 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     # COM positions for 3D
     com = out["r_com"]
 
-    #COM jump height 
+    # --- Calculate change in X for left foot marker ---
 
-    # For drop jump: jump height is max - min COM height between frames 200 and 270
-    com_window = com[160:230, 2]
-    com_min = np.min(com_window)
-    com_max = np.max(com_window)
-    jump_height = com_max - com_min
-    print(f"Drop jump height (max - min COM between frames 200-300): {jump_height:.3f} m")
+    # 1. Find the index of the greatest peak in COM force (landing)
+    landing_idx = np.argmax(F_ext_smooth)
 
-    # === SIMPLE PLOT: COM HEIGHT OVER TIME ===
-    plt.figure(figsize=(8, 4))
-    plt.plot(np.arange(com.shape[0]), com[:, 2], label='COM Height (Z)', color='purple')
-    plt.xlabel('Frames')
-    plt.ylabel('COM Height (m)')
-    plt.title('Center of Mass Height Over Time')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
+    # 2. Get the left foot marker positions (assuming label contains 'LFOOT' or similar)
+    foot_label = positions['r_foot']
+    # Plot l_foot marker position in X, Y, Z axes
+    foot_xyz = foot_label  # shape: (n_frames, 3)
+    # Plot left foot marker position in X, Y, Z axes across frames
+    fig_foot, axs_foot = plt.subplots(3, 1, figsize=(10, 6), sharex=True)
+    axes_labels = ['X', 'Y', 'Z']
+    for i in range(3):
+        axs_foot[i].plot(np.arange(foot_xyz.shape[0]), foot_xyz[:, i], label=f'L_FOOT {axes_labels[i]}')
+        axs_foot[i].set_ylabel(f'{axes_labels[i]} Position (mm)')
+        axs_foot[i].legend(loc='upper right', fontsize=9)
+        axs_foot[i].grid(True, alpha=0.3)
+    axs_foot[2].set_xlabel('Frame')
+    fig_foot.suptitle('Left Foot Marker Position Across Frames')
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
+
+    # Calculate average Y of left foot ~50 frames after landing
+    post_landing_start = 210
+    post_landing_end = 210 + 49
+    post_landing_end = min(post_landing_end, foot_xyz.shape[0])  # avoid overflow
+    avg_y_post_landing = np.mean(foot_xyz[post_landing_start:post_landing_end, 1])
+
+    # Calculate median Y of left foot in first 100 frames
+    start_frames = min(100, foot_xyz.shape[0])
+    median_y_start = np.median(foot_xyz[:start_frames, 1])
+
+    print(f"Average left foot Y (frames {post_landing_start}-{post_landing_end}): {avg_y_post_landing:.4f}")
+    print(f"Median left foot Y (first {start_frames} frames): {median_y_start:.4f}")
+    jump_distance = avg_y_post_landing - median_y_start
+    print(f"Estimated jump distance (Y change): {jump_distance:.4f} mm")
+
+
+    #COM jump height 
+    # # For drop jump: jump height is max - min COM height between frames 200 and 270
+    # com_window = com[160:230, 2]
+    # com_min = np.min(com_window)
+    # com_max = np.max(com_window)
+    # jump_height = com_max - com_min
+    # print(f"Min COM Z: {com_min:.3f} m at frame {np.argmin(com_window)+160}, max COM Z: {com_max:.3f} m at frame {np.argmax(com_window)+160}")
+    # print(f"Drop jump height (max - min COM between frames 200-300): {jump_height:.3f} mm")
+
+    # # === SIMPLE PLOT: COM HEIGHT OVER TIME ===
+    # plt.figure(figsize=(8, 4))
+    # plt.plot(np.arange(com.shape[0]), com[:, 2], label='COM Height (Z)', color='purple')
+    # plt.xlabel('Frames')
+    # plt.ylabel('COM Height (m)')
+    # plt.title('Center of Mass Height Over Time')
+    # plt.grid(True, alpha=0.3)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
     # === COMBINED PLOTTING ===
 
     fig = plt.figure(figsize=(16, 8))
