@@ -11,7 +11,8 @@ and analyze only that trial.
 """
 
 # Load only cmj_1
-cmj_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_CMJ1/Take 2025-09-12 01-49-57 PM-002/pose_filt_0.c3d')
+cmj_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_triple_hop_left_2/Take 2025-09-12 01-49-57 PM-028/pose_filt_0.c3d')
+
 params = cmj_1['parameters']
 fs = 100
 time = np.arange(cmj_1['data']['points'].shape[2]) / fs
@@ -53,9 +54,7 @@ rotation_data = cmj_1['data']['rotations']
 labels = cmj_1['parameters']['POINT']['LABELS']['value']
 labels_rotation = cmj_1['parameters']['ROTATION']['LABELS']['value']
 units = cmj_1['parameters']['POINT']['UNITS']['value']
-print("Units used:", units)
-print(f"POINT label count: {len(labels)}")
-print(f"ROTATION label count: {len(labels_rotation)}")
+
 
 # Optional: quick diagnostics to check cmj_2 and cmj_3 label availability
 RUN_DIAGNOSTICS = False
@@ -109,6 +108,7 @@ else:
 
 
 
+
 def extract_matrices(rotation_data, labels_rotation):
     # Build dict of joint_name -> (n_frames, 4, 4) for cmj_1 only
     matrices_dict = {}
@@ -119,7 +119,6 @@ def extract_matrices(rotation_data, labels_rotation):
             joint_name = label.replace('_4X4', '')
             joint_matrices = rotation_data[:, :, joint_idx, :].transpose(2, 0, 1)
             matrices_dict[joint_name] = joint_matrices
-    print(f"Extracted {len(matrices_dict)} joints for cmj_1")
     return matrices_dict
     
   
@@ -169,6 +168,7 @@ def find_initial_foot_contact(matrices_dict, standing_frames=10, threshold=5):
     return initial_contact_frame
 
 initial_contact_frame = find_initial_foot_contact(extract_matrices(rotation_data, labels_rotation))
+print(f"Initial foot contact frame: {initial_contact_frame}, Time: {initial_contact_frame/fs:.2f}s")
 
 #### Plotting the knee angles at initial contact for each trial
 ####Knee valgus/varus('-'move outwards) should be within -5 to 10 degre
@@ -195,42 +195,46 @@ if all_angles_3d:
 else:
     print("Angle channels unavailable; only position-based metrics computed.")
 
+    # Compute average hip flexion over 10 frames centered at initial contact (landing) frame
+window = 10
+half_window = window // 2
+start = max(0, initial_contact_frame - half_window)
+end = min(len(all_angles_3d['left_hip']['sagittal']), initial_contact_frame + half_window + 1)
 
-left_hip_flexion = all_angles_3d['left_hip']['sagittal'][initial_contact_frame]
-right_hip_flexion = all_angles_3d['right_hip']['sagittal'][initial_contact_frame]
-print(f"Left Hip Flexion at initial contact = {left_hip_flexion}")
-print(f"Right Hip Flexion at initial contact = {right_hip_flexion}")
+left_hip_flexion_avg = np.mean(all_angles_3d['left_hip']['sagittal'][start:end])
+right_hip_flexion_avg = np.mean(all_angles_3d['right_hip']['sagittal'][start:end])
+print(f"Left Hip Flexion at initial contact = {left_hip_flexion_avg}")
+print(f"Right Hip Flexion at initial contact = {right_hip_flexion_avg}")
+print("Initial contact frame:", initial_contact_frame)
+
 
         # Peak knee flexion AFTER initial contact
 # Plot knee flexion over time after initial contact
 import matplotlib.pyplot as plt
 
 left_knee_flexion_trace = all_angles_3d['left_knee']['sagittal']
-right_knee_flexion_trace = all_angles_3d['right_knee']['sagittal']
+
+# Find peaks (local maxima) in the left knee flexion trace
+peaks, _ = find_peaks(left_knee_flexion_trace)
 
 plt.figure(figsize=(10, 5))
 plt.plot(time, left_knee_flexion_trace, label='Left Knee Flexion')
-plt.plot(time, right_knee_flexion_trace, label='Right Knee Flexion')
-plt.xlabel('Time')
+plt.plot(time[peaks], left_knee_flexion_trace[peaks], 'ro', label='Peaks')
+plt.xlabel('Time (s)')
 plt.ylabel('Knee Flexion (degrees)')
-plt.title('Knee Flexion Over Time (Full Trial)')
+plt.title('Left Knee Flexion Over Time (Peaks Marked)')
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# Find maximum knee flexion (most negative value) after frame 400 for left and right knees
-if all_angles_3d:
-    left_knee_flexion_trace = all_angles_3d['left_knee']['sagittal']
-    right_knee_flexion_trace = all_angles_3d['right_knee']['sagittal']
-    max_left_flexion = np.max(left_knee_flexion_trace[500:])
-    max_right_flexion = np.max(right_knee_flexion_trace[500:])
-    max_left_flexion_frame = np.argmax(left_knee_flexion_trace[500:]) + 500
-    max_right_flexion_frame = np.argmax(right_knee_flexion_trace[500:]) + 500
-    print(f"Max Left Knee Flexion after frame 500: {max_left_flexion:.2f} deg at frame {max_left_flexion_frame}")
-    print(f"Max Right Knee Flexion after frame 500: {max_right_flexion:.2f} deg at frame {max_right_flexion_frame}")
-else:
-    print("Knee flexion data unavailable for max flexion calculation.")
+# Print peak values and their frame/time
+print("Left Knee Flexion Peaks:")
+for idx in peaks:
+    print(f"  Frame {idx}, Time {time[idx]:.2f}s: {left_knee_flexion_trace[idx]:.2f} deg")
+
+
+
 #     positions = extract_positions_from_matrices(matrices_dict)
 #     if foot_label not in positions:
 #         print(f"Warning: {foot_label} not found in cmj_1")
