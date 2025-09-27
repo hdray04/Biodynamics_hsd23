@@ -4,17 +4,16 @@ import re
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 
-# Update these paths if needed
+# File paths
 sldj_left_1 = ezc3d.c3d("/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_SLDJ1_left.c3d")
 sldj_left_2 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_SLDJ2_left.c3d')
 sldj_left_3 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_SLDJ3_left.c3d')
 sldj_right_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_SLDJ1_right.c3d')
 sldj_right_2 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_SLDJ2_right.c3d')
-cmj_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_CMJ1.c3d')
-sldj_right_3 = ezc3d.c3d('/Users/harrietdray/Baseline/Tash_SLDJ3_right.c3d')
+sldj_right_3 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Baseline/Tash_SLDJ3_right.c3d')
 print(sldj_right_1['data'].keys())
 
-# --- SLDJ LEFT 2 ---
+#Load data 
 points = sldj_right_1['data']['points']          # shape: (4, n_points, n_frames)
 labels = sldj_right_1['parameters']['POINT']['LABELS']['value']
 labels_rotation = sldj_right_1['parameters']['POINT']['ANGLES']['value']
@@ -24,29 +23,8 @@ n = np.arange(points.shape[2])
 n_frames = points.shape[2]
 time = np.arange(n_frames) / point_rate
 
-# --- CMJ 1 ---
-points_cmj = cmj_1['data']['points']
-labels_cmj = cmj_1['parameters']['POINT']['LABELS']['value']
-labels_rotation_cmj = cmj_1['parameters']['POINT']['ANGLES']['value']
-point_rate_cmj = float(cmj_1['parameters']['POINT']['RATE']['value'][0])
-print("Rate check (CMJ 1):", float(cmj_1['parameters']['ANALOG']['RATE']['value'][0]))
-n_cmj = np.arange(points_cmj.shape[2])
-n_frames_cmj = points_cmj.shape[2]
-time_cmj = np.arange(n_frames_cmj) / point_rate_cmj
 
 
-# === JUMP HEIGHT FROM MARKER DATA ===
-
-pelvis_i = labels.index('PELVISO')
-pelvis_cmj_i = labels_cmj.index('PELVISO')
-z = points[2, pelvis_i, :]
-z_cmj = points_cmj[2, pelvis_cmj_i, :]
-standing_z_of_cmj = np.mean(z_cmj[0:100])
-print("Standing pelvis height (mm):", standing_z_of_cmj)
-max_z = np.max(z)
-print("Max pelvis height (mm):", max_z)
-jump_height = max_z - standing_z_of_cmj
-print("Jump height (mm):", jump_height)
 
 # Plot PELVISO height over time
 plt.figure(figsize=(10, 4))
@@ -125,15 +103,21 @@ contact_time = len(contact_frames) / point_rate
 
 print(f"Toe spent {contact_time:.3f} s within 5mm of ground level before jump (frames {contact_frames[0] if contact_frames.size > 0 else 'N/A'} to {contact_frames[-1] if contact_frames.size > 0 else 'N/A'})")
 
-landing_frame = 
+landing_frame = ground_level_frame 
 
-
+# === JUMP HEIGHT FROM MARKER DATA ===
+pelvis_i = labels.index('PELVISO')
+z = points[2, pelvis_i, :]
+max_z = np.max(z)
+print("Max pelvis height (mm):", max_z)
+jump_height = max_z - ground_level_z
+print("Jump height (mm):", jump_height)
 
 ## === ANGLES AT LANDING ===
-print("Landing frame:", Landing_frame)
+print("Landing frame:", landing_frame)
 angles_deg = {}
-if Landing_frame is not None:
-    angles_deg = {name:points[:,labels.index(name),Landing_frame] for name in labels_rotation}
+if landing_frame is not None:
+    angles_deg = {name:points[:,labels.index(name),landing_frame] for name in labels_rotation}
 
     # Knee valgus at landing: Y angle of knee markers at landing frame
     knee_valgus = {}

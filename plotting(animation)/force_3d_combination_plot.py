@@ -105,6 +105,7 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     # Calculate jump distances including the first jump (from standing to first landing)
     jump_distances = []
 
+    #TRIPLE HOP: DISTANCES BETWEEN LANDINGS
     # First jump: from standing (mean of first 10 frames) to first landing
     if len(landing_frames) > 0:
         standing_x = np.median(heel_y[:10])
