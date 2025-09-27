@@ -36,17 +36,11 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     body_mass = 65  # kg, assumed body mass for the whole body COM calculation
     fs = 100  # Hz
 
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_SLDJ2_left/Take 2025-09-12 01-49-57 PM-014/pose_filt_0.c3d'
-    #filepath = "/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/SLDJ1_right/Take 2025-09-12 01-49-57 PM-015/pose_filt_0.c3d"
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_SLDJ1_right/Take 2025-09-12 01-49-57 PM-016/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/SLDJ3_right/Take 2025-09-12 01-49-57 PM-017/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_left_1/Take 2025-09-12 01-49-57 PM-022/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_left_3/Take 2025-09-12 01-49-57 PM-023/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Take 2025-09-12 01-49-57 PM-021-single_hop_left/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_left_2/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_right_1/Take 2025-09-12 01-49-57 PM-024/pose_filt_0.c3d'
-    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_right_1/Take 2025-09-12 01-49-57 PM-023/pose_filt_0.c3d'
-    filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_right_2/Take 2025-09-12 01-49-57 PM-025/pose_filt_0.c3d'
+    filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_triple_hop_left_2/Take 2025-09-12 01-49-57 PM-028/pose_filt_0.c3d'
+    
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_single_hop_right_2/Take 2025-09-12 01-49-57 PM-025/pose_filt_0.c3d'
+
+    #filepath = '/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_CMJ1/Take 2025-09-12 01-49-57 PM-002/pose_filt_0.c3d'
 
     cmj, labels_rotation = utils.load_data(filepath)
     matrices_dict = utils.extract_matrices(cmj, labels_rotation)
@@ -59,6 +53,7 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     n = F_ext.shape[0]
     t = np.arange(n) / fs
 
+
     # COM positions for 3D
     com = out["r_com"]
 
@@ -67,9 +62,9 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     # 1. Find the index of the greatest peak in COM force (landing)
     landing_idx = np.argmax(F_ext_smooth)
 
-    # 2. Get the left foot marker positions (assuming label contains 'LFOOT' or similar)
-    foot_label = positions['r_foot']
-    # Plot l_foot marker position in X, Y, Z axes
+    # 2. Get the right foot marker positions (assuming label contains 'RFOOT' or similar)
+    foot_label = positions['l_foot']
+    # Plot r_foot marker position in X, Y, Z axes
     foot_xyz = foot_label  # shape: (n_frames, 3)
     # Plot left foot marker position in X, Y, Z axes across frames
     fig_foot, axs_foot = plt.subplots(3, 1, figsize=(10, 6), sharex=True)
@@ -83,65 +78,108 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
     fig_foot.suptitle('Left Foot Marker Position Across Frames')
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
+    
 
-    # Calculate average Y of left foot ~50 frames after landing
-    post_landing_start = 210
-    post_landing_end = 210 + 49
-    post_landing_end = min(post_landing_end, foot_xyz.shape[0])  # avoid overflow
-    avg_y_post_landing = np.mean(foot_xyz[post_landing_start:post_landing_end, 1])
 
     # Calculate median Y of left foot in first 100 frames
     start_frames = min(100, foot_xyz.shape[0])
     median_y_start = np.median(foot_xyz[:start_frames, 1])
 
-    print(f"Average left foot Y (frames {post_landing_start}-{post_landing_end}): {avg_y_post_landing:.4f}")
-    print(f"Median left foot Y (first {start_frames} frames): {median_y_start:.4f}")
-    jump_distance = avg_y_post_landing - median_y_start
-    print(f"Estimated jump distance (Y change): {jump_distance:.4f} mm")
+    # Calculate distance of each jump using X and Z value of r_foot
+    heel_z = positions['l_foot'][:, 2]
+    heel_y = positions['l_foot'][:, 1]
 
+    # Standing Z value (mean of first 100 frames)
+    standing_z_heel = np.mean(heel_z[:100])
+
+    # Find all frames where heel_z is within 5 mm of standing (potential landings)
+    close_to_standing = np.abs(heel_z - standing_z_heel) < 4
+
+    # Find transitions: rising edge = takeoff, falling edge = landing
+    # We'll use the difference to find where close_to_standing changes from False to True (landing)
+    landing_frames = np.where((~close_to_standing[:-1]) & (close_to_standing[1:]))[0] + 1
+
+    # To avoid false positives at the start, ignore landings in the first 50 frames
+    landing_frames = landing_frames[landing_frames > 50]
+
+    # Calculate jump distances including the first jump (from standing to first landing)
+    jump_distances = []
+
+    # First jump: from standing (mean of first 10 frames) to first landing
+    if len(landing_frames) > 0:
+        standing_x = np.median(heel_y[:10])
+        first_landing_x = np.median(heel_y[landing_frames[0]:landing_frames[0]+10])
+        first_distance = first_landing_x - standing_x
+        jump_distances.append(first_distance)
+        print(f"Jump 1: from standing to frame {landing_frames[0]}, distance: {first_distance:.2f} mm")
+
+    # Subsequent jumps: between consecutive landings
+    for i in range(1, len(landing_frames)):
+        before = np.median(heel_y[landing_frames[i-1]:landing_frames[i-1]+10])
+        after = np.median(heel_y[landing_frames[i]:landing_frames[i]+10])
+        distance = after - before
+        jump_distances.append(distance)
+        print(f"Jump {i+1}: from frame {landing_frames[i-1]} to {landing_frames[i]}, distance: {distance:.2f} mm")
+
+
+
+
+    # For plotting: mark landings on the heel_x plot
+    plt.figure(figsize=(10, 4))
+    plt.plot(np.arange(heel_y.shape[0]), heel_y, label='l_foot Y')
+    plt.plot(landing_frames, heel_y[landing_frames], 'rx', label='Landings')
+    plt.xlabel('Frame')
+    plt.ylabel('Y Position (mm)')
+    plt.title(f'{"l_foot"} Y Position with Landings')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+    
 
     #COM jump height 
-    # # For drop jump: jump height is max - min COM height between frames 200 and 270
-    # com_window = com[160:230, 2]
-    # com_min = np.min(com_window)
-    # com_max = np.max(com_window)
-    # jump_height = com_max - com_min
-    # print(f"Min COM Z: {com_min:.3f} m at frame {np.argmin(com_window)+160}, max COM Z: {com_max:.3f} m at frame {np.argmax(com_window)+160}")
-    # print(f"Drop jump height (max - min COM between frames 200-300): {jump_height:.3f} mm")
+        # For drop jump: jump height is max - min COM height between frames 200 and 270
 
-    # # === SIMPLE PLOT: COM HEIGHT OVER TIME ===
-    # plt.figure(figsize=(8, 4))
-    # plt.plot(np.arange(com.shape[0]), com[:, 2], label='COM Height (Z)', color='purple')
-    # plt.xlabel('Frames')
-    # plt.ylabel('COM Height (m)')
-    # plt.title('Center of Mass Height Over Time')
-    # plt.grid(True, alpha=0.3)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.show()
-    # === COMBINED PLOTTING ===
+    standing_com_height = np.median(com[:200, 2])
+    com_max = np.max(com[:, 2])
+    jump_height = com_max - standing_com_height
+    print(f"Standing COM Z: {standing_com_height:.3f} m, max COM Z: {com_max:.3f} m at frame {np.argmax(com[:, 2])}")
+    print(f" jump height: {jump_height:.3f} mm")
+
+    # === SIMPLE PLOT: COM HEIGHT OVER TIME ===
+    plt.figure(figsize=(8, 4))
+    plt.plot(np.arange(com.shape[0]), com[:, 2], label='COM Height (Z)', color='purple')
+    plt.xlabel('Frames')
+    plt.ylabel('COM Height (m)')
+    plt.title('Center of Mass Height Over Time')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+        # === COMBINED PLOTTING ===
 
     fig = plt.figure(figsize=(16, 8))
-    # 3D plot on left (40% width), force evolution on right (60% width) with proper spacing
+        # 3D plot on left (40% width), force evolution on right (60% width) with proper spacing
     ax3d = plt.subplot2grid((12, 12), (0, 0), rowspan=7, colspan=4, projection='3d')
     ax_ts = plt.subplot2grid((12, 12), (0, 5), rowspan=7, colspan=7)
 
-    # 3D scene
+        # 3D scene
     artists = init_3d_artists(ax3d, positions, com)
     ax3d.set_title('3D Body Animation', fontsize=14, fontweight='bold', pad=20)
 
-    # Time series
+        # Time series
     cursor = plot_evolution(ax_ts, t, [F_ext, F_ext_smooth], ["Raw COM Force (Z)", "Smooth COM Force (Z)"])
     ax_ts.set_title("COM Force Over Time (Z-axis)")
-    # Add a vertical line at frame 351
+        # Add a vertical line at frame 351
 
-    # Instructions and layout
+        # Instructions and layout
     plt.subplots_adjust(bottom=0.20, left=0.05, right=0.98, top=0.90, wspace=0.15, hspace=0.3)
     fig.text(0.5, 0.02, "Controls: Drag slider • Arrow keys: ←/→ = ±1, ↑/↓ = ±10",
-             ha='center', fontsize=11,
-             bbox=dict(boxstyle="round,pad=0.4", facecolor="lightblue", alpha=0.8, edgecolor='gray'))
+                ha='center', fontsize=11,
+                bbox=dict(boxstyle="round,pad=0.4", facecolor="lightblue", alpha=0.8, edgecolor='gray'))
 
-    # Shared update
+        # Shared update
     def on_frame_change(idx):
         # Update 3D
         update_3d_frame(idx, artists, positions, com)
@@ -152,18 +190,17 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
         slider.label.set_text(f'Frame: {int(idx)}/{artists["n_frames"]-1}')
         fig.canvas.draw_idle()
 
-    # Create full-width slider at bottom with more space and centered label
+        # Create full-width slider at bottom with more space and centered label
     slider_ax = plt.subplot2grid((12, 12), (8, 1), colspan=10)  # Center the slider wider
     slider_ax.set_xticks([])
     slider_ax.set_yticks([])
     slider = Slider(slider_ax, f'Frame: 0/{artists["n_frames"]-1}', 0, artists['n_frames']-1, valinit=0, valstep=1, valfmt='%d')
-    
-    # Make slider thicker and easier to use
+        # Make slider thicker and easier to use
     slider.poly.set_height(0.6)  # Make slider track thicker
     slider.vline.set_linewidth(4)  # Make slider handle thicker
     slider.vline.set_color('darkblue')  # Color the handle
 
-    # Keyboard controls
+        # Keyboard controls
     def on_key(event):
         current_frame = int(slider.val)
         if event.key == 'right' and current_frame < artists['n_frames'] - 1:
@@ -180,4 +217,3 @@ if __name__ == "__main__":  # this only runs when the script is executed directl
 
     # Show
     plt.show()
-

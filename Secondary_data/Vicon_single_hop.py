@@ -13,17 +13,16 @@ single_hop_right_2 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_single_hop_righ
 single_hop_right_3 = ezc3d.c3d("/Users/harrietdray/Baseline/Tash_single_hop_right_3.c3d")
 #print(single_hop__left_2['data'].keys())
 
-points = single_hop_right_3['data']['points']          # shape: (4, n_points, n_frames)
-labels = single_hop_right_3['parameters']['POINT']['LABELS']['value']
-labels_rotation = single_hop_right_3['parameters']['POINT']['ANGLES']['value']
-point_rate = float(single_hop_right_3['parameters']['POINT']['RATE']['value'][0])
-print("Rate check:", float(single_hop_right_3['parameters']['ANALOG']['RATE']['value'][0]))
+points = single_hop_left_2['data']['points']          # shape: (4, n_points, n_frames)
+labels = single_hop_left_2['parameters']['POINT']['LABELS']['value']
+labels_rotation = single_hop_left_2['parameters']['POINT']['ANGLES']['value']
+point_rate = float(single_hop_left_2['parameters']['POINT']['RATE']['value'][0])
+print("Rate check:", float(single_hop_left_2['parameters']['ANALOG']['RATE']['value'][0]))
 n = np.arange(points.shape[2])
 n_frames = points.shape[2]
 time = np.arange(n_frames) / point_rate
 
-
-# === JUMP HEIGHT FROM MARKER DATA ===  
+# === JUMP HEIGHT FROM MARKER DATA ===
 
 pelvis_i = labels.index('PELVISO')
 z = points[2, pelvis_i, :]
@@ -44,7 +43,7 @@ jump_height = max_z - standing_z
 # === HEEL MARKER X MOVEMENT AND JUMP DISTANCE ===
 
 # Choose heel marker (e.g., 'LHEELO' or 'RHEELO')
-heel_label = 'RHEE'
+heel_label = 'LHEE'
 heel_i = labels.index(heel_label)
 heel_x = points[0, heel_i, :]
 
@@ -81,6 +80,17 @@ print(f"Standing {heel_label} X before jump (median of first 100 frames): {stand
 print(f"Standing {heel_label} X after jump (median of 100 frames after landing): {standing_x_after:.2f} mm")
 print(f"Jump distance (median X after - before): {jump_distance:.2f} mm")
 
+# Plot pelvis (PELVISO) height over time with landing frame marked
+plt.figure(figsize=(10, 4))
+plt.plot(time, z, label='PELVISO Z (Pelvis Height)')
+if Landing_frame is not None:
+    plt.axvline(time[Landing_frame], color='r', linestyle='--', label='Landing Frame')
+plt.xlabel('Time (s)')
+plt.ylabel('Pelvis Height (mm)')
+plt.title('Pelvis Height Over Time with Landing Frame')
+plt.legend()
+plt.tight_layout()
+plt.show()
 ## === ANGLES AT LANDING ===
 print("Landing frame:", Landing_frame)
 angles_deg = {}
@@ -143,3 +153,20 @@ if Landing_frame is not None:
             print(f"{name}: X={angles[0]:.2f}°, Y={angles[1]:.2f}°, Z={angles[2]:.2f}°")
         else:
             print(f"{name}: Not found in rotation labels")
+
+# === Plot peak left hip flexion (X angle) over time and extract peaks ===
+    lhip_idx = labels.index('LHipAngles')
+    lhip_x = points[0, lhip_idx, :]
+    plt.figure(figsize=(10, 4))
+    plt.plot(time, lhip_x, label='Left Hip Flexion (X)')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Flexion Angle (deg)')
+    plt.title('Left Hip Flexion Angle Over Time')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+peaks, _ = find_peaks(lhip_x, height=0)  # height=0 to find all peaks above 0 deg
+print(f"Left hip flexion peaks at frames: {peaks}")
+print(f"Peak values: {lhip_x[peaks]}")

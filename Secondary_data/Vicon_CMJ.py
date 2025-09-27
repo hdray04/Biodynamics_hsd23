@@ -252,24 +252,7 @@ for joint, names in joint_names.items():
         for side in names
     }
 
-print("\n=== Peak Flexion (X axis) After Landing ===")
-for joint, sides in peak_flexion.items():
-    for side, res in sides.items():
-        print(f"{joint} {side}: {res['max_x']:.2f} deg at frame {res['frame']}")
 
-        # === Plot Knee Flexion (X axis) Over Time ===
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for knee in ['LKneeAngles', 'RKneeAngles']:
-            if knee in labels_rotation:
-                idx = labels.index(knee)
-                ax.plot(time, points[0, idx, :], label=f"{knee} Flexion (X)")
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Knee Flexion (deg)")
-        ax.set_title("Knee Flexion Angle Over Time")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
 # Print ankle angles at landing frame
 ankle_names = ['LAnkleAngles', 'RAnkleAngles']
 print("\n=== Ankle Angles at Landing Frame ===")
@@ -282,7 +265,37 @@ for name in ankle_names:
         print(f"{name}: Not found in rotation labels")
 
 
+        # === Average Hip Flexion 10 Frames Around Landing ===
+window = 10  # frames before and after landing
+hip_flexion_avg = {}
+for name in hip_names:
+    if name in labels_rotation:
+        idx = labels.index(name)
+        # Convert landing index (analog) to marker frame
+        landing_frame = int(round(idx_land / (fs_an / point_rate)))
+        start = max(0, landing_frame - window)
+        end = min(points.shape[2], landing_frame + window + 1)
+        avg_flexion = np.mean(points[0, idx, start:end])
+        hip_flexion_avg[name] = avg_flexion
+        print(f"Average {name} flexion (X) from frame {start} to {end-1}: {avg_flexion:.2f}°")
+    else:
+        hip_flexion_avg[name] = float('nan')
+        print(f"{name}: Not found in rotation labels")
 
+        # Plot hip flexion (X angle) over frames for left and right hips
+plt.figure(figsize=(10, 4))
+for name in hip_names:
+    if name in labels_rotation:
+        idx = labels.index(name)
+        plt.plot(np.arange(points.shape[2]), points[0, idx, :], label=f"{name} flexion (X)")
+plt.axvline(Landing_frame, color='k', linestyle='--', label='Landing Frame')
+plt.xlabel('Frame')
+plt.ylabel('Hip Flexion (deg)')
+plt.title('Hip Flexion (X) Over Frames')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
 # Forces per plate
 # idx_max_f = idx_conc
 # idx_to = idx_tako

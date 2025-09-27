@@ -11,7 +11,7 @@ and analyze only that trial.
 """
 
 # Load only cmj_1
-cmj_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/Tash_triple_hop_left_2/Take 2025-09-12 01-49-57 PM-028/pose_filt_0.c3d')
+cmj_1 = ezc3d.c3d('/Users/harrietdray/Library/CloudStorage/OneDrive-ImperialCollegeLondon/ACL_data/Pilot - Tash/Pilot - Tash_c3d - Sorted/single_hop_left_2/pose_filt_0.c3d')
 
 params = cmj_1['parameters']
 fs = 100
@@ -213,25 +213,25 @@ print("Initial contact frame:", initial_contact_frame)
 import matplotlib.pyplot as plt
 
 left_knee_flexion_trace = all_angles_3d['left_knee']['sagittal']
-
-# Find peaks (local maxima) in the left knee flexion trace
-peaks, _ = find_peaks(left_knee_flexion_trace)
+# Find peaks (local maxima) in the left hip flexion trace
+left_hip_flexion_trace = all_angles_3d['left_hip']['sagittal']
+peaks, _ = find_peaks(left_hip_flexion_trace)
 
 plt.figure(figsize=(10, 5))
-plt.plot(time, left_knee_flexion_trace, label='Left Knee Flexion')
-plt.plot(time[peaks], left_knee_flexion_trace[peaks], 'ro', label='Peaks')
+plt.plot(time, left_hip_flexion_trace, label='Left Hip Flexion')
+
 plt.xlabel('Time (s)')
-plt.ylabel('Knee Flexion (degrees)')
-plt.title('Left Knee Flexion Over Time (Peaks Marked)')
+plt.ylabel('Hip Flexion (degrees)')
+plt.title('Left Hip Flexion Over Time')
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.show()
 
 # Print peak values and their frame/time
-print("Left Knee Flexion Peaks:")
+print("Left Hip Flexion Peaks:")
 for idx in peaks:
-    print(f"  Frame {idx}, Time {time[idx]:.2f}s: {left_knee_flexion_trace[idx]:.2f} deg")
+    print(f"  Frame {idx}, Time {time[idx]:.2f}s: {left_hip_flexion_trace[idx]:.2f} deg")
 
 
 
