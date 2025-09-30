@@ -3,7 +3,6 @@
 This standalone script shows how to use marker-based segment definitions
 to approximate the lower-body center of mass (COM) and estimate jump height.
 
-Update `cmj_*` paths to point at local C3D files before running.
 """
 
 import ezc3d
