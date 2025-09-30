@@ -8,6 +8,8 @@ from scipy.signal import find_peaks
 Previously this script combined CMJ trials. Per request, switch to
 single-trial analysis: extract labels and rotation labels from cmj_1
 and analyze only that trial.
+
+Also used for single leg hops and drop jumps if modified accordingly.
 """
 
 # Load only cmj_1
