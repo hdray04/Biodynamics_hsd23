@@ -1,4 +1,13 @@
-'''3D plot of COM with existing points'''
+"""Interactive 3D plotting of joints and optional COM.
+
+This script exposes helpers to create and update a 3D scene that visualises
+joint positions and optionally the center of mass (COM). A slider and arrow
+keys allow frame-by-frame navigation.
+
+Typical usage:
+    >>> from plotting.threeD_plot import plot_3d
+    >>> fig, slider = plot_3d(positions, com)
+"""
 
 
 # external
@@ -15,7 +24,12 @@ import src.utils as utils
 
 
 def _compute_axis_limits(positions, margin=200):
-    """Compute finite axis limits robustly; fall back if data invalid."""
+    """Compute finite axis limits robustly; fall back if data invalid.
+
+    Returns a cubic bounding box centered on the data with a small margin
+    to ensure all joints are visible. If inputs are invalid, falls back
+    to a default cube around the origin.
+    """
     try:
         stacks = []
         for joint, arr in positions.items():
@@ -42,9 +56,10 @@ def _compute_axis_limits(positions, margin=200):
 
 
 def init_3d_artists(ax, positions, com=None):
-    """
-    Add data and styles to 3D axes and
-    return a dict of artists and state for later updates.
+    """Initialise 3D artists for joints, connections and optional COM.
+
+    Returns a dictionary with references to matplotlib artists and state
+    (joint scatters, connection lines, COM markers, frame text, n_frames).
     """
 
     # === PLOTTING ===
@@ -135,7 +150,7 @@ def init_3d_artists(ax, positions, com=None):
 
 
 def update_3d_frame(frame_idx, artists, positions, com=None):
-    """Update joint, connections, and optional COM to a frame index."""
+    """Update joints, connections, and optional COM to a given frame."""
     # Update joint positions
     for joint_name, scatter in artists['joint_scatters'].items():
         if joint_name in positions and frame_idx < len(positions[joint_name]):
@@ -185,9 +200,14 @@ def attach_slider_and_keys(fig, n_frames, on_change):
 
 
 def plot_3d(positions, com=None):
-    """
-        Interactive 3D plot of joint positions and, optionally,
-        the center of mass (COM). Leave com as None to hide the COM.
+    """Interactive 3D plot of joints and optional COM with controls.
+
+    Parameters:
+    - positions: dict of joint -> (frames, 3) in mm
+    - com: optional (frames, 3) COM in mm; set None to hide
+
+    Returns:
+    - (fig, slider) for further customisation
     """
 
     fig = plt.figure(figsize=(14, 10))

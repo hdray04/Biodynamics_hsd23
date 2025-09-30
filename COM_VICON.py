@@ -1,3 +1,11 @@
+"""Compute a lower-body COM estimate from VICON markers.
+
+This standalone script shows how to use marker-based segment definitions
+to approximate the lower-body center of mass (COM) and estimate jump height.
+
+Update `cmj_*` paths to point at local C3D files before running.
+"""
+
 import ezc3d
 import numpy as np
 import re
@@ -53,7 +61,7 @@ lower_body_segments = [
      "mass_fraction": 0.0145},
 ]
 
-# Helper to get marker coordinates
+# Helper to get marker coordinates (mean of multiple labels)
 def mean_markers(marker_list):
     idx = [labels.index(label) for label in marker_list]
     return np.mean(points[:3, idx, :], axis=1)  # (3, n_frames)

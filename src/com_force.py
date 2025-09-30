@@ -1,4 +1,19 @@
-'''Calculation of forces from COM'''
+"""COM-based external force estimation utilities.
+
+This module computes the whole-body center of mass (COM) from joint
+positions and derives external force time series using Newton's laws.
+
+Key function: `compute_whole_body_com_fixed` which takes a dict of joint
+positions in millimetres, body mass (kg), and sampling frequency (Hz),
+and returns filtered positions, velocities, accelerations, and raw/smoothed
+external force estimates.
+
+Units
+- Input positions: millimetres (mm)
+- Output COM positions: millimetres (mm)
+- Output velocities/accelerations: derived from mm; where forces are computed
+  accelerations are internally converted to m/s^2.
+"""
 
 
 # external
@@ -7,9 +22,35 @@ import matplotlib.pyplot as plt
 from scipy import signal
 # internal
 from . import utils
+from typing import Dict, Any
 
 
-def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=np.array([0, 0, -9.81])):
+def compute_whole_body_com_fixed(
+    joints: Dict[str, np.ndarray],
+    body_mass: float,
+    fs: float,
+    cutoff_freq: float = 6.0,
+    g_vec: np.ndarray = np.array([0, 0, -9.81])
+) -> Dict[str, Any]:
+    """Compute whole-body COM and external forces from joint positions.
+
+    Parameters:
+    - joints: mapping of joint label -> (frames, 3) positions in mm.
+      Required labels must match `src.utils.SEGMENTS` proximal/distal names.
+    - body_mass: subject mass in kilograms.
+    - fs: sampling frequency in Hz.
+    - cutoff_freq: low-pass cutoff for COM position filtering (Hz).
+    - g_vec: gravity vector in m/s^2 (default: [0, 0, -9.81]).
+
+    Returns a dict containing:
+    - r_com_raw: unfiltered COM positions (frames, 3) in mm
+    - r_com: filtered COM positions (frames, 3) in mm
+    - v_com: COM velocity from filtered position (mm/s)
+    - a_com: COM acceleration from filtered position (mm/s^2)
+    - F_ext: external force from raw acceleration (N)
+    - F_ext_smooth: external force from filtered acceleration (N)
+    - filter_info: metadata for the applied filter
+    """
     segment_masses = []
     segment_coms = []
 
@@ -33,7 +74,7 @@ def compute_whole_body_com_fixed(joints, body_mass, fs, cutoff_freq=6.0, g_vec=n
     weighted = segment_coms * segment_masses[:, None, None]
     r_com_raw = np.sum(weighted, axis=0) / total_mass
 
-    # Step 2: Apply filtering to position
+    # Step 2: Apply low-pass filtering to position
     nyquist = fs / 2
     normalized_cutoff = cutoff_freq / nyquist
     b, a = signal.butter(4, normalized_cutoff, 'low')

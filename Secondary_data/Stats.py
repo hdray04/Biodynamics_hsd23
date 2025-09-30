@@ -1,3 +1,8 @@
+"""Small example: paired non-parametric test.
+
+Runs a Wilcoxon signed-rank test on two small arrays. Outputs the test statistic and p-value.
+"""
+
 import numpy as np
 from scipy.stats import wilcoxon
 

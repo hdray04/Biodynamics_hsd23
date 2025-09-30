@@ -1,4 +1,12 @@
-"""Combined 3D + evolution plot (with COM)"""
+"""Combined 3D animation and force evolution plot.
+
+This script demonstrates how to:
+- Load C3D data and compute COM and external forces
+- Animate a 3D skeleton with a frame slider and keyboard controls
+- Plot force-over-time with a moving cursor synced to the frame
+
+Run this file directly to see a demo (update the `filepath`).
+"""
 
 # external
 import matplotlib.pyplot as plt
@@ -15,6 +23,10 @@ from plotting.threeD_plot import init_3d_artists, update_3d_frame, attach_slider
 
 
 def plot_evolution(ax, t, series_list, labels):
+    """Plot one or more time series on `ax` with a time cursor.
+
+    Returns the cursor artist (a vertical line) to update during playback.
+    """
     for s, lab in zip(series_list, labels):
         ax.plot(t, s, label=lab, linewidth=1.5)
     ax.set_xlabel('Time (s)', fontsize=12)
